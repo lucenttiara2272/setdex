@@ -131,6 +131,8 @@ h2{font-size:17px;margin:26px 0 10px;letter-spacing:-.01em}
 .legal-foot a{color:var(--ink-2)}
 .legal p{margin:0;font-size:14px;color:var(--ink-2)}
 .legal p b{color:var(--ink)}
+.welcome{padding:18px;margin-bottom:22px;border-color:var(--accent)}
+.welcome .wname{display:grid;gap:6px;font-weight:600;font-size:14px;max-width:420px}
 .sets-group{margin:22px 0 10px;font-size:15px;font-weight:700;color:var(--ink-2);display:flex;align-items:center;gap:10px}
 .sets-group::after{content:"";flex:1;height:1px;background:var(--line)}
 .mark{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-3);min-height:20px}
@@ -157,7 +159,7 @@ h2{font-size:17px;margin:26px 0 10px;letter-spacing:-.01em}
 .stat .bar{margin-top:10px}
 .stat.hero .vl{font-size:30px}
 @media (max-width:780px){.stats{grid-template-columns:1fr 1fr 1fr;gap:8px}.stat.hero{grid-column:1/-1}.stat{padding:12px}.stat:not(.hero) .vl{font-size:18px}.stat .lb{font-size:10.5px}.stat .sub{font-size:12px}}
-@media (max-width:480px){.brand{font-size:0;gap:0}nav{margin-left:0}nav a{padding:7px 10px}}
+@media (max-width:480px){.brand{font-size:0;gap:0}nav{margin-left:0;gap:2px}nav a{padding:6px 8px;font-size:13px}}
 .loadnote{font-size:13px;color:var(--ink-3);margin-left:auto}
 
 /* card grid */
@@ -229,7 +231,7 @@ dialog::backdrop{background:rgba(8,10,16,.6)}
   <a class="syncst" id="syncst" href="#/settings" hidden></a>
 </div></header>
 <main id="main"></main>
-<footer class="legal-foot">SetDex is an unofficial fan project, not affiliated with Nintendo, The Pokémon Company, Creatures or GAME FREAK. <a href="#/settings/about">About &amp; legal</a></footer>
+<footer class="legal-foot">SetDex is an unofficial fan project, not affiliated with Nintendo, The Pokémon Company, Creatures or GAME FREAK. <a href="#/settings/help">How to use</a> · <a href="#/settings/about">About &amp; legal</a></footer>
 <dialog id="dlg"></dialog>
 <div class="toast" id="toast"></div>
 
@@ -689,6 +691,34 @@ function setStats(set, cards){
   return {uniq, total:cards.length, offOwned, offTotal, master, masterOwned, setVal, masterVal, myVal, priced, known};
 }
 
+/* ---------- getting started ---------- */
+const helpHTML = () => `
+  <div class="gstep"><span class="gn">1</span><div><b>Pick your name</b><p>There's no account to make. Your name is only shown to friends when you share your binder. You can change it any time on the <a href="#/trade">Trade</a> page.</p></div></div>
+  <div class="gstep"><span class="gn">2</span><div><b>Put SetDex on your home screen</b><p><b>iPhone:</b> in Safari, tap Share → <b>Add to Home Screen</b>. <b>Android:</b> in Chrome, tap ⋮ → <b>Install app</b>. Then it opens like an app, works offline, and your phone won't clear your cards.</p></div></div>
+  <div class="gstep"><span class="gn">3</span><div><b>Add your cards</b><p>Open <a href="#/sets">Sets</a>, pick a set and tap <b>+</b> on each card you have (<b>−</b> removes one). Tap the card picture for reverse holos and other versions. Missing cards stay grey. <a href="#/collection">Collection</a> shows what everything is worth.</p></div></div>
+  <div class="gstep"><span class="gn">4</span><div><b>Mark wants and trades</b><p>Open a card and tap <b>♡ Add to wants</b>, or press <b>♡ Want missing</b> on a set. Use the <b>For trade</b> counter on cards you'd swap, or on Trade press <b>Put my duplicates up for trade</b>.</p></div></div>
+  <div class="gstep"><span class="gn">5</span><div><b>Trade with friends</b><p>On <a href="#/trade">Trade</a>, press <b>Share my binder</b> and send the link. When a friend sends you theirs, open it to see what you can swap and what it's worth, then press <b>Save friend</b>.</p></div></div>
+  <div class="gstep"><span class="gn">6</span><div><b>Keep your cards safe</b><p>Your cards are saved on this device. Now and then press <b>Download backup</b> in <a href="#/settings">Settings</a>. To use several devices, set up <b>Sync with GitHub</b> in Settings (free; the guide is there).</p></div></div>`;
+function welcomeHTML(){
+  return `<div class="panel welcome" id="welcome">
+    <h2 style="margin:0 0 4px">Welcome to SetDex 👋</h2>
+    <p class="muted" style="margin:0 0 10px">Track your Pokémon cards set by set, see what they're worth, and trade with friends. It's free, and you don't need an account.</p>
+    <label class="wname">What should friends call you?<input class="input" id="wname" placeholder="Your name" maxlength="40" value="${esc(col.settings.name || "")}"></label>
+    <div class="guide" style="margin-top:12px;padding:0 14px">${helpHTML()}</div>
+    <div class="chips" style="margin-top:12px"><button class="btn primary" id="wgo">Start collecting</button><button class="btn" id="wskip">Skip</button></div>
+  </div>`;
+}
+function bindWelcome(){
+  const done = save => {
+    if(save){ const n = document.getElementById("wname").value.trim().slice(0, 40); if(n && n !== col.settings.name){ col.settings.name = n; touchSettings(); saveCol(); } }
+    lsSet("setdex-welcomed", 1); document.getElementById("welcome")?.remove();
+    if(save) toast(col.settings.name ? `Hi ${col.settings.name}! Open a set to add your cards.` : "Open a set to add your cards.");
+  };
+  document.getElementById("wgo").onclick = () => done(true);
+  document.getElementById("wskip").onclick = () => done(false);
+}
+const showWelcome = () => !lsGet("setdex-welcomed", 0) && !Object.keys(col.cards).length;
+
 /* ---------- views ---------- */
 let setsFilter = lsGet("setdex-ui-setsfilter", "all");
 async function viewSets(){
@@ -702,6 +732,7 @@ async function viewSets(){
   order.sort((a, b) => b.d.localeCompare(a.d) || b.n - a.n);
   const list = order.map(x => x.s);
   main.innerHTML = `
+    ${showWelcome() ? welcomeHTML() : ""}
     <h1>All sets</h1>
     <div class="toolbar">
       <input class="input" id="q" placeholder="Filter sets, e.g. Prismatic, 151, PAF" autocomplete="off">
@@ -711,6 +742,7 @@ async function viewSets(){
       </div>
     </div>
     <div class="sets" id="sets"></div>`;
+  if(document.getElementById("welcome")) bindWelcome();
   const q = document.getElementById("q");
   const draw = () => {
     const t = q.value.trim().toLowerCase();
@@ -1045,6 +1077,8 @@ function viewSettings(){
       <div id="fxinfo" class="muted" style="font-size:14px"></div>
       <div id="manual"></div>
     </div>
+    <h2 id="help">How to use SetDex</h2>
+    <details class="guide"><summary>Show the guide</summary>${helpHTML()}</details>
     <h2>Install on your phone</h2>
     <div class="panel set-form" id="installbox"></div>
     <h2>Sync with GitHub</h2>
@@ -1513,7 +1547,7 @@ function route(){
   else if(view === "binder" && arg) openBinderCode(arg);
   else if(view === "friend" && arg){ const f = col.friends[decodeURIComponent(arg)]; if(f) viewBinder(f.b, decodeURIComponent(arg)); else location.replace("#/trade/friends"); }
   else if(view === "connect" && arg) handleConnect(arg);
-  else if(view === "settings"){ viewSettings(); if(arg === "about") setTimeout(() => document.getElementById("about")?.scrollIntoView(), 50); }
+  else if(view === "settings"){ viewSettings(); if(arg === "about" || arg === "help") setTimeout(() => { const el = document.getElementById(arg); el?.scrollIntoView(); if(arg === "help") el?.nextElementSibling?.setAttribute("open", ""); }, 50); }
   else viewSets();
 }
 window.addEventListener("hashchange", route);
