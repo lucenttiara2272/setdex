@@ -94,7 +94,14 @@ h2{font-size:17px;margin:26px 0 10px;letter-spacing:-.01em}
 .syncst::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--ink-3)}
 .syncst.ok::before{background:var(--good)} .syncst.busy::before{background:#E0A100} .syncst.err{color:var(--accent)} .syncst.err::before{background:var(--accent)}
 @media (max-width:480px){.syncst span{display:none}}
-.steps{margin:0;padding-left:20px;color:var(--ink-2);font-size:14px;display:grid;gap:4px}
+.guide{border:1px solid var(--line);border-radius:12px;padding:4px 14px;background:var(--surface-2)}
+.guide summary{cursor:pointer;font-weight:700;padding:8px 0}
+.gstep{display:flex;gap:12px;padding:10px 0;border-top:1px solid var(--line)}
+.gstep p{margin:6px 0 0;font-size:14px;color:var(--ink-2)}
+.gn{flex:none;width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;font-size:14px}
+.glist{margin:6px 0 0;padding-left:18px;font-size:14px;color:var(--ink-2);display:grid;gap:4px}
+.gtips{border-top:1px solid var(--line);padding:10px 0;font-size:14px}
+.guide code{background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:0 5px;font-size:13px}
 .sets-group{margin:22px 0 10px;font-size:15px;font-weight:700;color:var(--ink-2);display:flex;align-items:center;gap:10px}
 .sets-group::after{content:"";flex:1;height:1px;background:var(--line)}
 .mark{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-3);min-height:20px}
@@ -1083,13 +1090,30 @@ function drawSyncInfo(){
     const owner = /\.github\.io$/.test(location.hostname) ? location.hostname.split(".")[0] : "";
     box.innerHTML = `
       <p class="muted" style="margin:0">Save your collection in your own private GitHub repository, so it's the same on all your devices and GitHub keeps every version. The token is stored only in this browser.</p>
-      <ol class="steps">
-        <li>Open <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a></li>
-        <li>Name it <b>SetDex</b> and pick an expiry date (1 year is fine).</li>
-        <li>Repository access: <b>Only select repositories</b> → <b>setdex-data</b>.</li>
-        <li>Permissions → Repository permissions → <b>Contents: Read and write</b>. Nothing else.</li>
-        <li>Generate the token, copy it and paste it below.</li>
-      </ol>
+      <details class="guide" ${sync ? "" : "open"}>
+        <summary>Step-by-step guide (about 5 minutes, once)</summary>
+        <div class="gstep"><span class="gn">1</span><div><b>Make a private repository for your cards</b>
+          <p>Open <a href="https://github.com/new?name=setdex-data&visibility=private&description=Private%20save%20data%20for%20SetDex" target="_blank" rel="noopener">github.com/new</a>. Name it <code>setdex-data</code>, choose <b>Private</b>, tick <b>Add a README file</b> and press <b>Create repository</b>.</p>
+          <p class="faint">Already made it? Skip this step.</p></div></div>
+        <div class="gstep"><span class="gn">2</span><div><b>Make a token (a key that only opens that one repository)</b>
+          <p>Open <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a> and fill in:</p>
+          <ul class="glist">
+            <li><b>Token name:</b> <code>SetDex</code></li>
+            <li><b>Expiration:</b> pick <b>1 year</b> (or Custom). When it runs out, make a new one.</li>
+            <li><b>Repository access:</b> <b>Only select repositories</b> → <b>Select repositories</b> → <code>setdex-data</code></li>
+            <li><b>Permissions:</b> click <b>+ Add permissions</b>, search for <b>Contents</b> and tick it. It's added as <i>Read-only</i>: click that and change it to <b>Read and write</b>.</li>
+            <li>GitHub adds <b>Metadata: Read-only</b> by itself. That's fine. Don't add anything else.</li>
+          </ul>
+          <p>Press <b>Generate token</b> and copy it right away. GitHub only shows it once. It starts with <code>github_pat_</code>.</p></div></div>
+        <div class="gstep"><span class="gn">3</span><div><b>Connect</b>
+          <p>Fill in the two boxes below and press <b>Connect</b>. Do this once on each phone or computer, using the same token or a new one.</p></div></div>
+        <div class="gtips"><b>If it doesn't work</b>
+          <ul class="glist">
+            <li><i>"didn't accept the token"</i>: the token was copied wrong or has expired. Make a new one.</li>
+            <li><i>"couldn't find the repository"</i>: check the name below, and that <code>setdex-data</code> is ticked under Repository access.</li>
+            <li><i>"isn't allowed to change"</i>: Contents is still Read-only. Edit the token on GitHub and set it to Read and write.</li>
+          </ul></div>
+      </details>
       <label>Data repository<input class="input" id="srepo" placeholder="your-name/setdex-data" value="${esc(owner ? owner + "/setdex-data" : "")}" autocomplete="off" spellcheck="false"></label>
       <label>Token<input class="input" id="stoken" type="password" placeholder="github_pat_…" autocomplete="off" spellcheck="false"></label>
       <div><button class="btn primary" id="sconn">Connect</button></div>`;
