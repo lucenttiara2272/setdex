@@ -694,20 +694,21 @@ function setStats(set, cards){
   cards = cards || set.cards;
   const ps = prices(set.id);
   const off = set.official || set.cards.length;
-  let uniq = 0, offTotal = 0, offOwned = 0, master = 0, masterOwned = 0, setVal = 0, masterVal = 0, myVal = 0, priced = 0, known = 0;
+  let uniq = 0, offTotal = 0, offOwned = 0, master = 0, masterOwned = 0, setVal = 0, masterVal = 0, myVal = 0, priced = 0, known = 0, offVal = 0;
   for(const c of cards){
     const i = ps[c.id]; const vs = i?.v || ["normal"]; const e = col.cards[c.id];
     const has = e && Object.keys(e.q).length;
     if(i) known++;
-    if((!c.part || c.inMain) && isOfficial(c.localId, off)){ offTotal++; if(has) offOwned++; }
+    const inOff = (!c.part || c.inMain) && isOfficial(c.localId, off);
+    if(inOff){ offTotal++; if(has) offOwned++; }
     if(has) uniq++;
     master += vs.length;
     vs.forEach(v => { const p = i?.p?.[v]; if(p != null) masterVal += p; if(e?.q?.[v]) masterOwned++; });
     const bp = i?.p?.[vs[0]];
-    if(bp != null){ setVal += bp; priced++; }
+    if(bp != null){ setVal += bp; priced++; if(inOff) offVal += bp; }
     if(e) for(const [v, n] of Object.entries(e.q)){ const p = i?.p?.[v]; if(p != null) myVal += p * n; }
   }
-  return {uniq, total:cards.length, offOwned, offTotal, master, masterOwned, setVal, masterVal, myVal, priced, known};
+  return {offVal, uniq, total:cards.length, offOwned, offTotal, master, masterOwned, setVal, masterVal, myVal, priced, known};
 }
 
 /* ---------- getting started ---------- */
@@ -911,6 +912,7 @@ function drawStats(){
   const el = document.getElementById("stats");
   if(!el || !current) return;
   const set = current.set, s = setStats(set, partCards());
+  const showMain = current.part === "all" || current.part === "split" || !set.subs?.length;
   const p = pct(s.uniq, s.total);
   const partial = s.priced < s.total ? `<div class="sub faint">${s.known < s.total ? "loading…" : `${s.total - s.priced} cards have no price`}</div>` : "";
   el.innerHTML = `
@@ -918,8 +920,10 @@ function drawStats(){
       <div class="vl">${s.uniq} <span class="faint">/ ${s.total}</span> <span style="font-size:17px" class="muted">${p}%</span></div>
       <div class="bar ${s.uniq && s.uniq >= s.total ? "done" : ""}"><i style="width:${p}%"></i></div>
       <div class="sub">${s.offTotal && (current.part === "all" || current.part === "split" || !set.subs?.length) ? `Main set ${s.offOwned}/${s.offTotal} · ` : ""}Master set ${s.masterOwned}/${s.master} (all variants)</div></div>
-    <div class="stat panel"><div class="lb">Set value</div><div class="vl">${money(s.setVal)}</div><div class="sub">One of every card</div>${partial}</div>
-    <div class="stat panel"><div class="lb">Master set value</div><div class="vl">${money(s.masterVal)}</div><div class="sub">Every variant</div></div>
+    ${showMain && s.offTotal < s.total
+      ? `<div class="stat panel"><div class="lb">Main set value</div><div class="vl">${money(s.offVal)}</div><div class="sub">One of each card #1–${set.official}</div><div class="sub">Full set with secret rares: <b>${money(s.setVal)}</b></div>${partial}</div>`
+      : `<div class="stat panel"><div class="lb">Set value</div><div class="vl">${money(s.setVal)}</div><div class="sub">One of every card</div>${partial}</div>`}
+    <div class="stat panel"><div class="lb">Master set value</div><div class="vl">${money(s.masterVal)}</div><div class="sub">Every card in every version${s.master > s.total ? ` (${s.master} cards incl. reverse holos)` : ""}</div></div>
     <div class="stat panel"><div class="lb">My cards</div><div class="vl" style="color:var(--good)">${money(s.myVal)}</div><div class="sub">${pct(s.myVal, s.masterVal)}% of master value</div></div>`;
 }
 
