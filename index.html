@@ -698,7 +698,7 @@ const helpHTML = () => `
   <div class="gstep"><span class="gn">3</span><div><b>Add your cards</b><p>Open <a href="#/sets">Sets</a>, pick a set and tap <b>+</b> on each card you have (<b>−</b> removes one). Tap the card picture for reverse holos and other versions. Missing cards stay grey. <a href="#/collection">Collection</a> shows what everything is worth.</p></div></div>
   <div class="gstep"><span class="gn">4</span><div><b>Mark wants and trades</b><p>Open a card and tap <b>♡ Add to wants</b>, or press <b>♡ Want missing</b> on a set. Use the <b>For trade</b> counter on cards you'd swap, or on Trade press <b>Put my duplicates up for trade</b>.</p></div></div>
   <div class="gstep"><span class="gn">5</span><div><b>Trade with friends</b><p>On <a href="#/trade">Trade</a>, press <b>Share my binder</b> and send the link. When a friend sends you theirs, open it to see what you can swap and what it's worth, then press <b>Save friend</b>.</p></div></div>
-  <div class="gstep"><span class="gn">6</span><div><b>Keep your cards safe</b><p>Your cards are saved on this device. Now and then press <b>Download backup</b> in <a href="#/settings">Settings</a>. To use several devices, set up <b>Sync with GitHub</b> in Settings (free; the guide is there).</p></div></div>`;
+  <div class="gstep"><span class="gn">6</span><div><b>Keep your cards safe</b><p>Your cards are saved on this device, so you don't need GitHub or any account to use SetDex. Now and then press <b>Download backup</b> in <a href="#/settings">Settings</a>.</p><p><b>Optional:</b> if you want the same collection on your phone <i>and</i> your computer, set up <b>Sync with GitHub</b> in Settings. It's free, takes about 5 minutes, and the guide there walks you through it.</p></div></div>`;
 function welcomeHTML(){
   return `<div class="panel welcome" id="welcome">
     <h2 style="margin:0 0 4px">Welcome to SetDex 👋</h2>
@@ -1455,7 +1455,7 @@ function drawSyncInfo(){
     };
   }else{
     box.innerHTML = `
-      <p class="muted" style="margin:0">Save your collection in your own private GitHub repository, so it's the same on all your devices and GitHub keeps every version. The token is stored only in this browser.</p>
+      <p class="muted" style="margin:0"><b>Optional.</b> You only need this if you want the same collection on several devices. It saves your collection in your own private GitHub repository, and GitHub keeps every version. The token is stored only in this browser.</p>
       <details class="guide" ${sync ? "" : "open"}>
         <summary>Step-by-step guide (about 5 minutes, once)</summary>
         <div class="gstep"><span class="gn">1</span><div><b>Make a private repository for your cards</b>
