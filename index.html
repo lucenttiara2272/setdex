@@ -383,10 +383,18 @@ async function ownData(file){
 let setsList = null;
 async function getSets(){
   if(setsList) return setsList;
-  const [own, api] = await Promise.all([
-    ownData("sets.json"),
-    cached("setdex-sets", "/sets", d => d.map(s => ({id:s.id, name:s.name, logo:s.logo||"", symbol:s.symbol||"", total:s.cardCount?.total||0, official:s.cardCount?.official||0}))).catch(e => null)
-  ]);
+  const apiList = () => cached("setdex-sets", "/sets", d => d.map(s => ({id:s.id, name:s.name, logo:s.logo||"", symbol:s.symbol||"", total:s.cardCount?.total||0, official:s.cardCount?.official||0}))).catch(e => null);
+  const own = await ownData("sets.json");
+  let api = null;
+  if(own){
+    // our copy is enough to show the page; sets newer than it are added in the background
+    apiList().then(list => {
+      if(!list || !setsList) return;
+      const known = new Set(setsList.map(s => s.id));
+      const extra = list.filter(s => !known.has(s.id));
+      if(extra.length){ setsList.push(...extra); const h = location.hash.replace(/^#\/?/, ""); if(h === "" || h === "sets") route(); }
+    });
+  }else api = await apiList();
   if(!own && !api) throw new Error("no set list");
   const mine = own ? own.sets.map(s => ({id:s.id, name:s.name, logo:s.logo || "", symbol:s.symbol || "", logoFile:s.logoFile || "", symbolFile:s.symbolFile || "", total:s.total || 0, official:s.official || 0})) : [];
   const known = new Set(mine.map(s => s.id));
@@ -489,19 +497,40 @@ function reconcile(setId, id){
   return changed;
 }
 
+/* today's prices for a whole set in one file (data/prices, updated daily by GitHub Actions) */
+const ownPriceMem = {};
+const ownPrices = id => id in ownPriceMem ? ownPriceMem[id] : (ownPriceMem[id] = ownData("prices/" + id + ".json"));
+async function fillOwnPrices(setId){
+  const ps = prices(setId); let n = 0;
+  for(const id of [setId, ...(CHILDREN[setId] || [])]){
+    const f = await ownPrices(id); if(!f || !f.cards) continue;
+    const t = Date.parse(f.updated) || 0;
+    for(const [cid, c] of Object.entries(f.cards)){
+      if(ps[cid] && ps[cid].t >= t) continue;
+      ps[cid] = Object.assign(slim(c), {t, o:1}); reconcile(setId, cid); n++;
+    }
+  }
+  if(n) savePrices(setId);
+}
+/* price info older than this is fetched again (the daily file gets a little extra time) */
+const stale = e => !e || Date.now() - e.t > (e.o ? 2 * DAY : DAY);
 let loadToken = 0;
 /* fetch full card details (variants + prices) for the given cards, 6 at a time */
 async function loadDetails(setId, cards, onTick, force){
   const token = loadToken;
+  if(!force) await fillOwnPrices(setId);
   const ps = prices(setId);
-  const todo = cards.filter(c => force || !ps[c.id] || Date.now() - ps[c.id].t > DAY);
+  const todo = cards.filter(c => force || stale(ps[c.id]));
   if(!todo.length){ onTick && onTick(0, 0); return; }
   let i = 0, done = 0, since = 0, failed = 0;
   async function worker(){
     while(i < todo.length && token === loadToken){
       const c = todo[i++];
       try{ ps[c.id] = slim(await getJSON("/cards/" + encodeURIComponent(c.id))); reconcile(setId, c.id); }
-      catch(e){ failed++; }
+      catch(e){
+        if(e.message === "HTTP 404") ps[c.id] = {v:["normal"], p:{}, r:"", t:Date.now()};   // not in the price database: don't ask again today
+        else failed++;
+      }
       done++;
       if(++since >= 25){ since = 0; savePrices(setId); }
       if(token === loadToken && onTick) onTick(done, todo.length, failed);
@@ -719,6 +748,7 @@ async function viewSet(id, part){
   if(!set.subs?.length) part = "all";
   else if(part !== "all" && part !== "main" && !set.subs.some(x => x.id === part)) part = "main";
   current = {set, part};
+  await fillOwnPrices(set.id);   // today's prices from our own daily file, before the first paint
   const mainCount = set.cards.filter(c => !c.part).length;
   const tabs = set.subs?.length ? `<div class="tabs">${[["main", set.name, mainCount], ...set.subs.map(x => [x.id, x.name, set.cards.filter(c => c.part === x.id).length]), ["all", set.subs.length > 1 ? "All" : "Both", set.cards.length]]
     .map(([k, n, c]) => `<a class="tab ${k === part ? "on" : ""}" href="#/set/${encodeURIComponent(set.id)}/${encodeURIComponent(k)}">${esc(n)} <span>${c}</span></a>`).join("")}</div>` : "";
@@ -916,6 +946,8 @@ async function openCard(card, setId, onChange){
     render(); onChange && onChange();
   };
   if(!dlg.open) dlg.showModal();
+  if(!info(setId, card.id)) await fillOwnPrices(setId);
+  if(dlg.open && info(setId, card.id)) render();
   if(!info(setId, card.id)){
     try{ prices(setId)[card.id] = slim(await getJSON("/cards/" + encodeURIComponent(card.id))); reconcile(setId, card.id); savePrices(setId); }catch(e){}
     if(dlg.open){ render(); onChange && onChange(); }

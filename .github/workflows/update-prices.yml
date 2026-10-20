@@ -1,0 +1,47 @@
+name: Update prices
+
+on:
+  schedule:
+    - cron: "23 5 * * *"   # every day, 05:23 UTC (Cardmarket prices update once a day)
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/build-prices.mjs"
+      - ".github/workflows/update-prices.yml"
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  prices:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Fetch today's prices
+        run: node scripts/build-prices.mjs
+      - name: Save changes
+        id: save
+        run: |
+          git add data/prices
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Update prices"
+            git pull --rebase -q && git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish the site
+        if: steps.save.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds" || echo "Pages will update on its own"
