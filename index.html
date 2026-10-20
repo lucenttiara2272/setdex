@@ -1420,7 +1420,6 @@ function drawSyncInfo(){
       setSync(""); drawSyncInfo(); toast("Disconnected");
     };
   }else{
-    const owner = /\.github\.io$/.test(location.hostname) ? location.hostname.split(".")[0] : "";
     box.innerHTML = `
       <p class="muted" style="margin:0">Save your collection in your own private GitHub repository, so it's the same on all your devices and GitHub keeps every version. The token is stored only in this browser.</p>
       <details class="guide" ${sync ? "" : "open"}>
@@ -1447,7 +1446,7 @@ function drawSyncInfo(){
             <li><i>"isn't allowed to change"</i>: Contents is still Read-only. Edit the token on GitHub and set it to Read and write.</li>
           </ul></div>
       </details>
-      <label>Data repository<input class="input" id="srepo" placeholder="your-name/setdex-data" value="${esc(owner ? owner + "/setdex-data" : "")}" autocomplete="off" spellcheck="false"></label>
+      <label>Data repository<input class="input" id="srepo" placeholder="your-github-name/setdex-data" value="${esc(lsGet("setdex-lastrepo", ""))}" autocomplete="off" spellcheck="false"></label>
       <label>Token<input class="input" id="stoken" type="password" placeholder="github_pat_…" autocomplete="off" spellcheck="false"></label>
       <div><button class="btn primary" id="sconn">Connect</button></div>`;
     document.getElementById("sconn").onclick = async ev => {
@@ -1463,7 +1462,7 @@ function drawSyncInfo(){
         const j = await r.json();
         if(!j.private && !confirm(`${repo} is PUBLIC, so anyone could see your collection. Use it anyway?\n\nBetter: make it private in the repository's Settings first.`)) throw new Error("");
         if(j.permissions && !j.permissions.push) throw new Error("The token can read but not change this repository. Give it Contents: Read and write.");
-        lsSet("setdex-sync", sync);
+        lsSet("setdex-sync", sync); lsSet("setdex-lastrepo", repo);
         drawSyncInfo();
         const ok = await syncNow();
         toast(ok ? "Connected. Your collection is synced." : "Connected, but the first sync had a problem");
