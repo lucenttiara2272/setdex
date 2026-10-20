@@ -1185,7 +1185,7 @@ async function viewTrade(tab){
   const fr = Object.entries(col.friends).sort((a, b) => (b[1].saved || 0) - (a[1].saved || 0));
   main.innerHTML = `<h1>Trade</h1>
     <div class="panel set-form" style="margin-top:14px;max-width:none">
-      <label>Your name <span class="faint" style="font-weight:400">Friends see this when you share</span><input class="input" id="tname" value="${esc(col.settings.name || "")}" placeholder="e.g. Lucent" maxlength="40"></label>
+      <label>Your name <span class="faint" style="font-weight:400">Friends see this when you share</span><input class="input" id="tname" value="${esc(col.settings.name || "")}" placeholder="Your name" maxlength="40"></label>
       <div class="chips"><button class="btn primary" id="share">Share my binder</button><button class="btn" id="dups">Put my duplicates up for trade</button></div>
       <div id="shareout"></div>
       <p class="muted" style="margin:0;font-size:13px">Sharing makes a link with your <b>for trade</b> cards and your <b>wants</b>. Your friend opens it and sees what you can swap. No account is needed, and nothing is stored on a server. When your lists change, share a new link.</p>
