@@ -10,7 +10,16 @@ A free Pokémon TCG collection tracker. Track every set and subset card by card,
 - Tap **+** / **−** on a card to add or remove a copy. Tap the picture for reverse holos and other versions.
 - Set value, master set value and the value of your own cards, from daily Cardmarket prices.
 - Prices in EUR, NOK, SEK, DKK, USD or GBP, converted with the European Central Bank's daily rates.
-- Sync with a private GitHub repository, so your collection is the same on every device.
+- **Trading:** mark cards **for trade**, keep a **wants** list, and share your binder with friends as a link. Their app shows what you can swap, and what it's worth.
+- Sync with a private GitHub repository, so your collection is the same on every device. Connect your phone by scanning a QR code.
+
+## Trading with friends
+1. Open a card you own and use the **For trade** counter, or press **Trade → Put my duplicates up for trade** (you keep one of each).
+2. Add cards you're looking for to your **wants**: open a card and press **♡ Add to wants**, or open a set and press **♡ Want missing**. Cards leave the list by themselves when you add them to your collection.
+3. Go to **Trade**, write your name and press **Share my binder**. Send the link to a friend.
+4. Your friend opens the link and sees **what they can get from you** and **what they can give you**, with values. They can press **Save friend** and send you their own link back.
+
+The link holds your lists itself, so no account or server is needed. Friends don't need GitHub. When your lists change, share a new link.
 
 ## Sync your collection (free, private)
 Your collection is saved in your own **private** GitHub repository, `setdex-data`, so it's the same on your phone and computer, and GitHub keeps every old version. The app talks to GitHub directly. No other server is involved.
@@ -50,7 +59,9 @@ When it's right, the Permissions box shows exactly this:
 2. **Data repository:** `lucenttiara2272/setdex-data`
 3. Paste the token and press **Connect**.
 
-Do step 3 once on every phone and computer. The token is stored only in that browser. It isn't part of backups or the synced file.
+**Phone the easy way:** on a computer that's already connected, go to **Settings → Sync with GitHub → Connect another device (QR code)** and scan the code with your phone's camera. The phone connects by itself, with no typing. The code contains your token, so don't screenshot or share it. It disappears after 2 minutes.
+
+Otherwise, do step 3 once on every phone and computer. The token is stored only in that browser. It isn't part of backups or the synced file.
 
 ### If it doesn't work
 | The app says | What to do |

@@ -102,6 +102,22 @@ h2{font-size:17px;margin:26px 0 10px;letter-spacing:-.01em}
 .glist{margin:6px 0 0;padding-left:18px;font-size:14px;color:var(--ink-2);display:grid;gap:4px}
 .gtips{border-top:1px solid var(--line);padding:10px 0;font-size:14px}
 .guide code{background:var(--surface);border:1px solid var(--line);border-radius:5px;padding:0 5px;font-size:13px}
+.tile .art{position:relative}
+.tile .flags{position:absolute;left:6px;bottom:6px;display:flex;flex-direction:column;gap:3px;align-items:flex-start;pointer-events:none}
+.fl{font-size:10.5px;font-weight:700;padding:2px 6px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.fl.t{background:#2F6FEB;color:#fff}.fl.w{background:#fff;color:#D6336C}
+.tnote{color:var(--ink-2);font-weight:600}
+.trow{display:flex;align-items:center;gap:10px;padding:6px 0 10px 14px;border-bottom:1px solid var(--line);font-size:13px;color:var(--ink-2)}
+.trow .step{margin-left:auto}
+.step.sm button{width:30px;height:30px;font-size:16px}.step.sm span{min-width:28px}
+.btn.wanted{color:#D6336C;border-color:#D6336C}
+.sumrow{display:flex;gap:10px;flex-wrap:wrap;margin:6px 0 12px}
+.sumrow .stat{flex:1;min-width:150px}
+.frow{display:flex;align-items:center;gap:12px;padding:12px 14px;text-decoration:none}
+.frow .r{margin-left:auto;text-align:right;font-size:13px;color:var(--ink-2)}
+.sharebox{display:grid;gap:8px}
+.qrbox{background:#fff;padding:12px;border-radius:12px;width:max-content;max-width:100%}
+.qrbox svg{display:block;width:240px;height:240px}
 .sets-group{margin:22px 0 10px;font-size:15px;font-weight:700;color:var(--ink-2);display:flex;align-items:center;gap:10px}
 .sets-group::after{content:"";flex:1;height:1px;background:var(--line)}
 .mark{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-3);min-height:20px}
@@ -135,7 +151,7 @@ h2{font-size:17px;margin:26px 0 10px;letter-spacing:-.01em}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:12px}
 @media (max-width:480px){.grid{grid-template-columns:repeat(3,1fr);gap:8px}}
 .tile{position:relative}
-.tile .art{all:unset;cursor:pointer;display:block;border-radius:7px;overflow:hidden;aspect-ratio:245/342;background:var(--surface-2);width:100%}
+.tile .art{all:unset;position:relative;cursor:pointer;display:block;border-radius:7px;overflow:hidden;aspect-ratio:245/342;background:var(--surface-2);width:100%}
 .tile .art img{width:100%;height:100%;object-fit:cover;transition:filter .2s,opacity .2s}
 .tile:not(.own) .art img{filter:grayscale(1);opacity:.42}
 .tile .art .noimg{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:8px;font-size:12px;color:var(--ink-3)}
@@ -193,6 +209,7 @@ dialog::backdrop{background:rgba(8,10,16,.6)}
   <nav>
     <a href="#/sets" data-nav="sets">Sets</a>
     <a href="#/collection" data-nav="collection">Collection</a>
+    <a href="#/trade" data-nav="trade">Trade</a>
     <a href="#/search" data-nav="search">Search</a>
     <a href="#/settings" data-nav="settings">Settings</a>
   </nav>
@@ -244,7 +261,9 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt
 
 let col = lsGet("setdex-collection", null) || {cards:{}};
 col.cards = col.cards || {};
-col.del = col.del || {};   // deleted card ids → time, so deletions sync to other devices
+col.del = col.del || {};   // deleted card ids → time, so deletions sync to other devices ("w:" + id for wants)
+col.wants = col.wants || {};     // cardId → {s, n, l, i, r?, u}
+col.friends = col.friends || {}; // key → {b: binder, saved}
 Object.values(col.cards).forEach(e => { if(SUBSETS[e.s]){ e.r = e.s; e.s = SUBSETS[e.s]; } });
 col.settings = Object.assign({currency:"EUR", nok:11.7, usd:0.9, auto:true, manual:{}}, col.settings || {});
 col.settings.manual = Object.assign({NOK:col.settings.nok}, col.settings.manual || {});
@@ -254,6 +273,58 @@ function saveCol(){
 }
 const touch = id => { const e = col.cards[id]; if(e){ e.u = Date.now(); delete col.del[id]; } else col.del[id] = Date.now(); };
 const touchSettings = () => { col.su = Date.now(); };
+
+/* ---------- trading: for trade + wants ---------- */
+const tradeCount = id => { const t = col.cards[id]?.t; return t ? Object.values(t).reduce((a, b) => a + b, 0) : 0; };
+const isWanted = id => !!col.wants[id];
+function setTrade(id, v, n){
+  const e = col.cards[id]; if(!e) return;
+  n = Math.max(0, Math.min(e.q[v] || 0, n | 0));
+  e.t = e.t || {};
+  if(n) e.t[v] = n; else delete e.t[v];
+  if(!Object.keys(e.t).length) delete e.t;
+  touch(id); saveCol();
+}
+function setWant(card, setId, on){
+  if(on){ col.wants[card.id] = {s:setId, n:card.name, l:card.localId, i:card.image || "", u:Date.now(), ...(card.rs ? {r:card.rs} : {})}; delete col.del["w:" + card.id]; }
+  else { delete col.wants[card.id]; col.del["w:" + card.id] = Date.now(); }
+  saveCol();
+}
+const VC = {normal:"n", holo:"h", reverse:"r", firstEdition:"f"}, VD = {n:"normal", h:"holo", r:"reverse", f:"firstEdition"};
+const APP_URL = location.protocol === "https:" ? location.origin + location.pathname : "https://lucenttiara2272.github.io/setdex/";
+function b64url(bytes){
+  let bin = ""; for(let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+const fromB64url = str => Uint8Array.from(atob(str.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+/* your trade list + wants, packed small enough to fit in a link */
+async function packBinder(){
+  const t = [], w = [];
+  Object.entries(col.cards).forEach(([id, e]) => Object.entries(e.t || {}).forEach(([v, n]) => t.push([id, e.l, VC[v] || v, n, e.n])));
+  Object.entries(col.wants).forEach(([id, e]) => w.push([id, e.l, e.n]));
+  const json = JSON.stringify({v:1, n:col.settings.name || "", d:new Date().toISOString().slice(0, 10), t, w});
+  const z = new Blob([json]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+  return b64url(new Uint8Array(await new Response(z).arrayBuffer()));
+}
+async function unpackBinder(code){
+  const z = new Blob([fromB64url(code)]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  const b = JSON.parse(await new Response(z).text());
+  if(!b || b.v !== 1 || !Array.isArray(b.t) || !Array.isArray(b.w)) throw new Error("bad binder");
+  return b;
+}
+/* card object for a card id + number from a friend's binder */
+function binderCard(id, l, name){
+  const real = id.slice(0, id.length - String(l).length - 1);
+  return {id, localId:String(l), name:String(name || ""), rs:real, s:parentOf(real), guess:true};
+}
+/* what you and a friend can swap */
+function matches(b){
+  const get = b.t.map(([id, l, v, n, name]) => ({c:binderCard(id, l, name), v:VD[v] || v, n, want:isWanted(id), have:ownedCount(id)}))
+    .filter(x => x.want || !x.have).sort((a, b) => b.want - a.want);
+  const give = b.w.map(([id, l, name]) => ({c:binderCard(id, l, name), trade:tradeCount(id), have:ownedCount(id)}))
+    .filter(x => x.trade || x.have >= 2).sort((a, b) => b.trade - a.trade);
+  return {get, give};
+}
 
 /* collection entry: col.cards[cardId] = {s:setId, n:name, l:localId, i:imageBase, q:{variant:count}} */
 const entry = id => col.cards[id];
@@ -265,7 +336,9 @@ function setQty(card, setId, v, n){
   if(!e) e = col.cards[card.id] = {s:setId, n:card.name, l:card.localId, i:card.image || "", q:{}};
   if(card.rs) e.r = card.rs;
   if(n) e.q[v] = n; else delete e.q[v];
+  if(e.t){ if((e.t[v] || 0) > n){ if(n) e.t[v] = n; else delete e.t[v]; } if(!Object.keys(e.t).length) delete e.t; }
   if(!Object.keys(e.q).length) delete col.cards[card.id];
+  if(n && col.wants[card.id]){ delete col.wants[card.id]; col.del["w:" + card.id] = Date.now(); }   // got it: off the wants list
   touch(card.id);
   saveCol();
 }
@@ -489,7 +562,7 @@ function cardUrls(c, setId, q){
   const big = q === "high";
   const ptcg = pid ? [`https://images.scrydex.com/pokemon/${pid}-${encodeURIComponent(num)}/${big ? "large" : "small"}`, `https://images.pokemontcg.io/${pid}/${encodeURIComponent(num)}${big ? "_hires" : ""}.png`] : [];
   // TCGdex English first, then the Pokémon TCG API, then TCGdex in other languages
-  return c.image ? [img(c.image, q), ...ptcg, ...alt.slice(1)] : [...ptcg, ...alt.slice(1)];
+  return c.image ? [img(c.image, q), ...ptcg, ...alt.slice(1)] : [...(c.guess ? alt.slice(0, 1) : []), ...ptcg, ...alt.slice(1)];
 }
 function logoUrls(s){
   const sid = sinfo(s.id).serieId;
@@ -632,9 +705,19 @@ async function viewSet(id, part){
         <button class="chip" data-cs="price">By price</button>
       </div>
       <span class="loadnote" id="ln"></span>
+      <button class="btn small" id="wantmiss">♡ Want missing</button>
       <button class="btn small danger" id="reset">Reset</button>
     </div>
     <div class="grid" id="grid"></div>`;
+  document.getElementById("wantmiss").onclick = () => {
+    const miss = partCards().filter(c => !ownedCount(c.id) && !isWanted(c.id));
+    if(!miss.length){ toast("No missing cards to add"); return; }
+    if(!confirm(`Add ${miss.length} missing cards to your wants list?`)) return;
+    const t = Date.now();
+    miss.forEach(c => { col.wants[c.id] = {s:set.id, n:c.name, l:c.localId, i:c.image || "", u:t, ...(c.rs ? {r:c.rs} : {})}; delete col.del["w:" + c.id]; });
+    saveCol(); drawGrid();
+    toast(`Added ${miss.length} cards to your wants`, () => { const t2 = Date.now(); miss.forEach(c => { delete col.wants[c.id]; col.del["w:" + c.id] = t2; }); saveCol(); drawGrid(); });
+  };
   document.getElementById("reset").onclick = () => {
     const mine = partCards().filter(c => ownedCount(c.id));
     const label = part === "all" || part === "main" || !set.subs?.length ? set.name : (set.subs.find(x => x.id === part)?.name || set.name);
@@ -714,23 +797,26 @@ function drawStats(){
 }
 
 const qcHTML = (n, name) => (n ? `<button data-act="minus" aria-label="Remove one ${esc(name || "")}">−</button><span class="cnt">${n}</span>` : "") + `<button data-act="add" aria-label="Add one ${esc(name || "")}">+</button>`;
-function tileHTML(c, setId, showSet){
+const flagsHTML = id => (tradeCount(id) ? `<span class="fl t">${tradeCount(id)} for trade</span>` : "") + (isWanted(id) ? `<span class="fl w">♥ Want</span>` : "");
+function tileHTML(c, setId, showSet, opt){
+  opt = opt || {};
   const n = ownedCount(c.id);
   const vs = variantsOf(setId, c.id);
   const bp = priceOf(setId, c.id, vs[0]);
-  return `<div class="tile ${n ? "own" : ""}" data-id="${esc(c.id)}" data-set="${esc(setId)}">
-    <button class="art" data-act="open" aria-label="${esc(c.name)}">${imgTag(cardUrls(c, setId), c.name, `<div class="noimg"><b>#${esc(c.localId)}</b>${esc(c.name)}<span>No picture yet</span></div>`, true)}</button>
-    <div class="qc">${qcHTML(n, c.name)}</div>
+  return `<div class="tile ${n || opt.noqc ? "own" : ""}" data-id="${esc(c.id)}" data-set="${esc(setId)}">
+    <button class="art" data-act="open" aria-label="${esc(c.name)}">${imgTag(cardUrls(c, setId), c.name, `<div class="noimg"><b>#${esc(c.localId)}</b>${esc(c.name)}<span>No picture yet</span></div>`, true)}<span class="flags">${opt.noqc ? "" : flagsHTML(c.id)}</span></button>
+    ${opt.noqc ? "" : `<div class="qc">${qcHTML(n, c.name)}</div>`}
     <div class="meta"><span class="num">#${esc(c.localId)} ${esc(c.name)}</span><span class="price">${bp != null ? money(bp) : ""}</span></div>
     ${showSet || c.sub ? `<div class="sname">${showSet && sinfo(setId).code ? `<span class="code">${esc(sinfo(setId).code)}</span> ` : ""}${esc(c.sub || setMeta(setId)?.name || setId)}</div>` : ""}
+    ${opt.note ? `<div class="sname tnote">${opt.note}</div>` : ""}
     <div class="vd">${vs.length > 1 ? vs.map(v => `<i class="${qty(c.id, v) ? "on" : ""}" title="${VLABEL[v]}"></i>`).join("") : ""}</div>
   </div>`;
 }
 function refreshTile(el){
   const id = el.dataset.id, setId = el.dataset.set;
   const n = ownedCount(id), vs = variantsOf(setId, id), bp = priceOf(setId, id, vs[0]);
-  el.classList.toggle("own", !!n);
-  el.querySelector(".qc").innerHTML = qcHTML(n);
+  el.classList.toggle("own", !!n || !el.querySelector(".qc"));
+  const qc = el.querySelector(".qc"); if(qc){ qc.innerHTML = qcHTML(n); el.querySelector(".flags").innerHTML = flagsHTML(id); }
   el.querySelector(".price").textContent = bp != null ? money(bp) : "";
   el.querySelector(".vd").innerHTML = vs.length > 1 ? vs.map(v => `<i class="${qty(id, v) ? "on" : ""}" title="${VLABEL[v]}"></i>`).join("") : "";
 }
@@ -773,8 +859,10 @@ async function openCard(card, setId, onChange){
           <div class="muted">${esc(setMeta(setId)?.name || setId)}${card.sub ? " · " + esc(card.sub) : ""} · #${esc(card.localId)}${i?.r ? " · " + esc(i.r) : ""}</div>
           <div style="margin-top:14px">
             ${vs.map(v => `<div class="vrow"><div><div class="vn">${VLABEL[v] || v}</div><div class="vp">${i ? (priceOf(setId, card.id, v) != null ? money(priceOf(setId, card.id, v)) : "No price") : "Loading price…"}</div></div>
-              <div class="step"><button data-v="${v}" data-d="-1" aria-label="Remove one">−</button><span>${qty(card.id, v)}</span><button data-v="${v}" data-d="1" aria-label="Add one">+</button></div></div>`).join("")}
+              <div class="step"><button data-v="${v}" data-d="-1" aria-label="Remove one">−</button><span>${qty(card.id, v)}</span><button data-v="${v}" data-d="1" aria-label="Add one">+</button></div></div>
+              ${qty(card.id, v) ? `<div class="trow"><span>For trade <span class="faint">(of your ${qty(card.id, v)})</span></span><div class="step sm"><button data-v="${v}" data-t="-1" aria-label="One less for trade">−</button><span>${col.cards[card.id]?.t?.[v] || 0}</span><button data-v="${v}" data-t="1" aria-label="One more for trade">+</button></div></div>` : ""}`).join("")}
           </div>
+          <div style="margin-top:12px"><button class="btn small ${isWanted(card.id) ? "wanted" : ""}" data-want>${isWanted(card.id) ? "♥ On your wants list" : "♡ Add to wants"}</button></div>
           <p class="muted" style="margin-top:14px">Your copies are worth <b style="color:var(--good)">${money(mine)}</b></p>
           <p style="font-size:13px"><a href="https://www.cardmarket.com/en/Pokemon/Products/Search?searchString=${encodeURIComponent(card.name)}" target="_blank" rel="noopener">Look up on Cardmarket ↗</a></p>
         </div>
@@ -783,6 +871,9 @@ async function openCard(card, setId, onChange){
   render();
   dlg.onclick = e => {
     if(e.target === dlg || e.target.closest("[data-x]")){ dlg.close(); return; }
+    if(e.target.closest("[data-want]")){ setWant(card, setId, !isWanted(card.id)); render(); onChange && onChange(); return; }
+    const t = e.target.closest("[data-t]");
+    if(t){ setTrade(card.id, t.dataset.v, (col.cards[card.id]?.t?.[t.dataset.v] || 0) + (+t.dataset.t)); render(); onChange && onChange(); return; }
     const b = e.target.closest("[data-d]"); if(!b) return;
     setQty(card, setId, b.dataset.v, qty(card.id, b.dataset.v) + (+b.dataset.d));
     render(); onChange && onChange();
@@ -927,7 +1018,7 @@ function viewSettings(){
   cur.onchange = () => { s.currency = cur.value; touchSettings(); saveCol(); drawFx(); toast("Saved"); };
   document.getElementById("auto").onchange = e => { s.auto = e.target.checked; touchSettings(); saveCol(); drawFx(); if(s.auto) refreshRates().then(drawFx); };
   document.getElementById("exp").onclick = () => {
-    const blob = new Blob([JSON.stringify({app:"setdex", version:1, saved:new Date().toISOString(), cards:col.cards, settings:col.settings}, null, 1)], {type:"application/json"});
+    const blob = new Blob([JSON.stringify({app:"setdex", version:1, saved:new Date().toISOString(), cards:col.cards, wants:col.wants, friends:col.friends, settings:col.settings}, null, 1)], {type:"application/json"});
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
     a.download = `setdex-backup-${new Date().toISOString().slice(0,10)}.json`; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
@@ -943,6 +1034,8 @@ function viewSettings(){
       Object.keys(col.cards).forEach(id => { if(!d.cards[id]) col.del[id] = t; });
       Object.values(d.cards).forEach(e => e.u = t);
       Object.keys(d.cards).forEach(id => delete col.del[id]);
+      if(d.wants){ Object.keys(col.wants).forEach(id => { if(!d.wants[id]) col.del["w:" + id] = t; }); Object.values(d.wants).forEach(e => e.u = t); col.wants = d.wants; }
+      if(d.friends){ col.friends = d.friends; col.fu = t; }
       col.cards = d.cards; col.settings = Object.assign({}, col.settings, d.settings || {}); touchSettings();
       saveCol(); toast("Backup restored");
     }catch(e){ toast("That file isn't a SetDex backup"); }
@@ -959,6 +1052,150 @@ function viewSettings(){
     Object.keys(priceMem).forEach(k => delete priceMem[k]); Object.keys(setMem).forEach(k => delete setMem[k]); setsList = null;
     toast("Card data cleared. It reloads when you open a set.");
   };
+}
+
+/* ---------- trade page ---------- */
+const entryCard = (id, e) => ({id, name:e.n, localId:e.l, image:e.i, rs:e.r});
+async function viewTrade(tab){
+  tab = ["wants", "friends"].includes(tab) ? tab : "trade";
+  try{ await getSets(); }catch(e){}
+  const tradeIds = Object.keys(col.cards).filter(id => tradeCount(id));
+  const wantIds = Object.keys(col.wants);
+  const fr = Object.entries(col.friends).sort((a, b) => (b[1].saved || 0) - (a[1].saved || 0));
+  main.innerHTML = `<h1>Trade</h1>
+    <div class="panel set-form" style="margin-top:14px;max-width:none">
+      <label>Your name <span class="faint" style="font-weight:400">Friends see this when you share</span><input class="input" id="tname" value="${esc(col.settings.name || "")}" placeholder="e.g. Lucent" maxlength="40"></label>
+      <div class="chips"><button class="btn primary" id="share">Share my binder</button><button class="btn" id="dups">Put my duplicates up for trade</button></div>
+      <div id="shareout"></div>
+      <p class="muted" style="margin:0;font-size:13px">Sharing makes a link with your <b>for trade</b> cards and your <b>wants</b>. Your friend opens it and sees what you can swap. No account is needed, and nothing is stored on a server. When your lists change, share a new link.</p>
+    </div>
+    <div class="tabs">
+      <a class="tab ${tab === "trade" ? "on" : ""}" href="#/trade">For trade <span>${tradeIds.reduce((a, id) => a + tradeCount(id), 0)}</span></a>
+      <a class="tab ${tab === "wants" ? "on" : ""}" href="#/trade/wants">Wants <span>${wantIds.length}</span></a>
+      <a class="tab ${tab === "friends" ? "on" : ""}" href="#/trade/friends">Friends <span>${fr.length}</span></a>
+    </div>
+    <div id="tc" style="margin-top:14px"></div>`;
+  document.getElementById("tname").onchange = e => { col.settings.name = e.target.value.trim().slice(0, 40); touchSettings(); saveCol(); toast("Saved"); };
+  document.getElementById("dups").onclick = () => {
+    const ch = [];
+    Object.entries(col.cards).forEach(([id, e]) => Object.entries(e.q).forEach(([v, n]) => { if(n > 1 && (e.t?.[v] || 0) < n - 1) ch.push([id, v, n - 1]); }));
+    if(!ch.length){ toast("No extra duplicates to put up for trade"); return; }
+    const before = JSON.stringify(ch.map(([id]) => [id, col.cards[id].t || null]));
+    ch.forEach(([id, v, n]) => { const e = col.cards[id]; e.t = e.t || {}; e.t[v] = n; touch(id); });
+    saveCol(); viewTrade(tab);
+    toast(`${ch.reduce((a, x) => a + x[2], 0)} duplicates are now for trade (you keep one of each)`, () => {
+      JSON.parse(before).forEach(([id, t]) => { const e = col.cards[id]; if(!e) return; if(t) e.t = t; else delete e.t; touch(id); });
+      saveCol(); viewTrade(tab);
+    });
+  };
+  document.getElementById("share").onclick = async () => {
+    if(!tradeIds.length && !wantIds.length){ toast("Mark some cards for trade or add wants first"); return; }
+    let code; try{ code = await packBinder(); }catch(e){ toast("Your browser can't make share links. Try updating it."); return; }
+    const url = APP_URL + "#/binder/" + code;
+    const out = document.getElementById("shareout");
+    out.innerHTML = `<div class="sharebox"><input class="input" readonly value="${esc(url)}"><div class="chips"><button class="btn small" id="cpy">Copy link</button>${navigator.share ? `<button class="btn small" id="shr">Send…</button>` : ""}<a class="btn small" href="#/binder/${code}">Preview</a></div></div>`;
+    out.querySelector("input").onclick = e => e.target.select();
+    document.getElementById("cpy").onclick = async () => { try{ await navigator.clipboard.writeText(url); toast("Link copied"); }catch(e){ out.querySelector("input").select(); toast("Press Ctrl+C to copy"); } };
+    const shr = document.getElementById("shr");
+    if(shr) shr.onclick = () => navigator.share({title:"My Pokémon trade binder", text:`${col.settings.name || "My"} trade binder on SetDex`, url}).catch(() => {});
+  };
+  const tc = document.getElementById("tc");
+  if(tab === "trade"){
+    tc.innerHTML = tradeIds.length ? `<div class="grid" id="tg">${tradeIds.map(id => {
+      const e = col.cards[id];
+      return tileHTML(entryCard(id, e), e.s, true, {note:Object.entries(e.t).map(([v, n]) => `${n}× ${VLABEL[v] || v}`).join(", ")});
+    }).join("")}</div>` : `<div class="panel" style="padding:18px"><b>Nothing for trade yet.</b><p class="muted">Press <b>Put my duplicates up for trade</b>, or open any card you own and use the <b>For trade</b> counter.</p></div>`;
+  }else if(tab === "wants"){
+    tc.innerHTML = wantIds.length ? `<div class="grid" id="tg">${wantIds.map(id => tileHTML(entryCard(id, col.wants[id]), col.wants[id].s, true)).join("")}</div>`
+      : `<div class="panel" style="padding:18px"><b>No wants yet.</b><p class="muted">Open a card and press <b>♡ Add to wants</b>, or open a set and press <b>♡ Want missing</b>. Cards leave the list by themselves when you add them to your collection.</p></div>`;
+  }else{
+    tc.innerHTML = `<div class="panel set-form" style="max-width:none;margin-bottom:12px"><label>Open a friend's link<input class="input" id="flink" placeholder="Paste the link your friend sent you"></label><div><button class="btn" id="fopen">Open</button></div></div>
+      ${fr.length ? `<div class="rows">${fr.map(([k, f]) => { const m = matches(f.b);
+        return `<a class="frow panel" href="#/friend/${encodeURIComponent(k)}"><div><b>${esc(f.b.n || "Friend")}</b><div class="faint" style="font-size:12px">Shared ${esc(f.b.d || "")} · ${f.b.t.length} for trade · ${f.b.w.length} wants</div></div>
+          <div class="r"><b style="color:var(--good)">${m.get.length}</b> you can get<br><b style="color:#2F6FEB">${m.give.length}</b> you can give</div></a>`; }).join("")}</div>`
+        : `<p class="muted">No friends saved yet. When a friend sends you their link, open it and press <b>Save friend</b>.</p>`}`;
+    document.getElementById("fopen").onclick = () => {
+      const v = document.getElementById("flink").value.trim(), m = v.match(/#\/binder\/([\w-]+)/) || v.match(/^([\w-]{20,})$/);
+      if(!m){ toast("That doesn't look like a SetDex binder link"); return; }
+      location.hash = "#/binder/" + m[1];
+    };
+  }
+  const tg = document.getElementById("tg");
+  if(tg) bindGrid(tg, null, id => { const e = col.cards[id] || col.wants[id]; return e && entryCard(id, e); }, () => {});
+}
+
+async function viewBinder(b, key){
+  try{ await getSets(); }catch(e){}
+  const saved = key && col.friends[key];
+  const name = b.n || "Your friend";
+  const draw = () => {
+    const m = matches(b);
+    const val = list => list.reduce((a, x) => { const vs = variantsOf(x.c.s, x.c.id); const p = priceOf(x.c.s, x.c.id, x.v && vs.includes(x.v) ? x.v : vs[0]); return a + (p || 0) * (x.n ? Math.min(x.n, 1) : 1); }, 0);
+    const getV = val(m.get), giveV = val(m.give);
+    main.innerHTML = `<a class="back" href="#/trade/friends">← Trade</a>
+      <h1>${esc(name)}'s binder</h1>
+      <div class="muted">Shared ${esc(b.d || "")} · ${b.t.length} for trade · ${b.w.length} wants</div>
+      <div class="chips" style="margin-top:12px">${saved ? `<button class="btn" id="fdel">Remove friend</button>` : `<button class="btn primary" id="fsave">Save friend</button>`}</div>
+      <div class="sumrow" style="margin-top:14px">
+        <div class="stat panel"><div class="lb">You can get</div><div class="vl" style="color:var(--good)">${m.get.length} <span class="faint" style="font-size:16px">card${m.get.length === 1 ? "" : "s"}</span></div><div class="sub">Worth about ${money(getV)}</div></div>
+        <div class="stat panel"><div class="lb">You can give</div><div class="vl" style="color:#2F6FEB">${m.give.length} <span class="faint" style="font-size:16px">card${m.give.length === 1 ? "" : "s"}</span></div><div class="sub">Worth about ${money(giveV)}</div></div>
+      </div>
+      <h2>You can get from ${esc(name)}</h2>
+      ${m.get.length ? `<div class="grid">${m.get.map(x => tileHTML(x.c, x.c.s, true, {noqc:true, note:`${x.want ? "♥ On your wants · " : "You don't have it · "}${x.n}× ${VLABEL[x.v] || x.v}`})).join("")}</div>` : `<p class="muted">Nothing new for you in their trade list right now.</p>`}
+      <h2>${esc(name)} wants, and you can give</h2>
+      ${m.give.length ? `<div class="grid">${m.give.map(x => tileHTML(x.c, x.c.s, true, {noqc:true, note:x.trade ? `${x.trade} for trade` : `You have ${x.have} (duplicate)`})).join("")}</div>` : `<p class="muted">You don't have spare copies of anything on their wants list.</p>`}
+      <details style="margin-top:22px"><summary class="muted" style="cursor:pointer;font-weight:600">All ${b.t.length} cards ${esc(name)} has for trade</summary><div class="grid" style="margin-top:12px">${b.t.map(([id, l, v, n, nm]) => { const c = binderCard(id, l, nm); return tileHTML(c, c.s, true, {noqc:true, note:`${n}× ${VLABEL[VD[v]] || v}`}); }).join("")}</div></details>
+      <details style="margin-top:12px"><summary class="muted" style="cursor:pointer;font-weight:600">All ${b.w.length} cards ${esc(name)} wants</summary><div class="grid" style="margin-top:12px">${b.w.map(([id, l, nm]) => { const c = binderCard(id, l, nm); return tileHTML(c, c.s, true, {noqc:true}); }).join("")}</div></details>`;
+    const fs = document.getElementById("fsave");
+    if(fs) fs.onclick = () => {
+      const k = (b.n || "friend").toLowerCase().replace(/[^a-z0-9æøå]+/g, "-").replace(/^-|-$/g, "") || "friend";
+      col.friends[k] = {b, saved:Date.now()}; col.fu = Date.now(); saveCol();
+      toast(`Saved ${name} as a friend`); history.replaceState(null, "", "#/friend/" + encodeURIComponent(k)); viewBinder(b, k);
+    };
+    const fd = document.getElementById("fdel");
+    if(fd) fd.onclick = () => { if(!confirm(`Remove ${name} from your friends?`)) return; delete col.friends[key]; col.fu = Date.now(); saveCol(); location.hash = "#/trade/friends"; };
+    main.querySelectorAll(".grid").forEach(g => bindGrid(g, null, (id, tile) => { const all = [...b.t.map(x => binderCard(x[0], x[1], x[4])), ...b.w.map(x => binderCard(x[0], x[1], x[2]))]; return all.find(c => c.id === id); }, () => {}));
+  };
+  draw();
+  // load prices for the cards in this binder, set by set
+  const bySet = {};
+  [...b.t.map(x => binderCard(x[0], x[1], x[4])), ...b.w.map(x => binderCard(x[0], x[1], x[2]))].forEach(c => (bySet[c.s] = bySet[c.s] || []).push({id:c.id}));
+  const token = loadToken;
+  for(const [sid, cards] of Object.entries(bySet)){ await loadDetails(sid, cards); if(token !== loadToken) return; }
+  if(token === loadToken){ const y = scrollY; draw(); scrollTo(0, y); }
+}
+async function openBinderCode(code){
+  main.innerHTML = loading("Opening binder…");
+  try{ viewBinder(await unpackBinder(code), null); }
+  catch(e){ main.innerHTML = failBox("This binder link doesn't work. Ask your friend to share it again."); }
+}
+
+/* ---------- connect another device with a QR code ---------- */
+function loadQR(){
+  return window.qrcode ? Promise.resolve() : new Promise((ok, bad) => { const sc = document.createElement("script"); sc.src = "qrcode.js"; sc.onload = ok; sc.onerror = bad; document.head.append(sc); });
+}
+let qrTimer = 0;
+async function showConnectQR(box){
+  try{ await loadQR(); }catch(e){ toast("Couldn't load the QR code maker"); return; }
+  const url = APP_URL + "#/connect/" + b64url(new TextEncoder().encode(JSON.stringify({r:sync.repo, k:sync.token})));
+  const qr = qrcode(0, "L"); qr.addData(url); qr.make();
+  box.innerHTML = `<div class="qrbox">${qr.createSvgTag({cellSize:4, margin:4, scalable:true})}</div>
+    <p style="margin:8px 0 0;font-size:14px">Scan this with your phone's camera and open the link. The phone connects by itself.</p>
+    <p class="faint" style="margin:4px 0 0;font-size:13px">The code contains your sync token, so don't take a screenshot or show it to anyone. It disappears in 2 minutes.</p>
+    <div style="margin-top:8px"><button class="btn small" id="qrhide">Hide code</button></div>`;
+  const hide = () => { clearTimeout(qrTimer); box.innerHTML = ""; };
+  document.getElementById("qrhide").onclick = hide;
+  clearTimeout(qrTimer); qrTimer = setTimeout(hide, 120000);
+}
+async function handleConnect(code){
+  history.replaceState(null, "", location.pathname + location.search + "#/settings");   // wipe the token from the address bar
+  let d;
+  try{ d = JSON.parse(new TextDecoder().decode(fromB64url(code))); }catch(e){}
+  if(!d || !/^[\w.-]+\/[\w.-]+$/.test(d.r || "") || !d.k){ route(); toast("That connect code didn't work. Make a new one."); return; }
+  sync = {repo:d.r, token:d.k}; lsSet("setdex-sync", sync);
+  route();
+  const ok = await syncNow();
+  toast(ok ? "This device is connected and synced" : "Connected, but the first sync had a problem");
 }
 
 /* ---------- sync with a private GitHub repository ---------- */
@@ -1013,28 +1250,35 @@ async function readRemote(){
   return {data:JSON.parse(text || "{}"), sha:j.sha};
 }
 /* newest change wins, card by card */
-function mergeInto(remote){
-  const rc = remote.cards || {}, rd = remote.del || {};
-  const ids = new Set([...Object.keys(col.cards), ...Object.keys(col.del), ...Object.keys(rc), ...Object.keys(rd)]);
-  const cards = {}, del = {}, old = Date.now() - 180 * DAY;
+function mergeMap(L, R, LD, RD, pre, del, old){
+  const out = {};
+  const ids = new Set([...Object.keys(L), ...Object.keys(R)]);
+  [...Object.keys(LD), ...Object.keys(RD)].forEach(k => { if(pre ? k.startsWith(pre) : !k.startsWith("w:")) ids.add(k.slice(pre.length)); });
   ids.forEach(id => {
-    const a = col.cards[id], b = rc[id];
+    const a = L[id], b = R[id];
     const best = a && b ? ((b.u || 0) > (a.u || 0) ? b : a) : (a || b);
-    const dt = Math.max(col.del[id] || 0, rd[id] || 0);
-    if(best && (best.u || 0) >= dt) cards[id] = best;
-    else if(dt > old) del[id] = dt;
+    const dt = Math.max(LD[pre + id] || 0, RD[pre + id] || 0);
+    if(best && (best.u || 0) >= dt) out[id] = best;
+    else if(dt > old) del[pre + id] = dt;
   });
-  col.cards = cards; col.del = del;
+  return out;
+}
+function mergeInto(remote){
+  const rd = remote.del || {}, del = {}, old = Date.now() - 180 * DAY;
+  col.cards = mergeMap(col.cards, remote.cards || {}, col.del, rd, "", del, old);
+  col.wants = mergeMap(col.wants, remote.wants || {}, col.del, rd, "w:", del, old);
+  col.del = del;
+  if((remote.fu || 0) > (col.fu || 0)){ col.friends = remote.friends || {}; col.fu = remote.fu; }
   if((remote.su || 0) > (col.su || 0) && remote.settings){ col.settings = Object.assign({}, col.settings, remote.settings); col.su = remote.su; }
 }
-const payload = () => JSON.stringify({app:"setdex", version:2, updated:new Date().toISOString(), cards:col.cards, del:col.del, settings:col.settings, su:col.su || 0});
-const sameData = (a, b) => JSON.stringify([a.cards || {}, a.del || {}, a.su || 0]) === JSON.stringify([b.cards || {}, b.del || {}, b.su || 0]);
+const payload = () => JSON.stringify({app:"setdex", version:2, updated:new Date().toISOString(), cards:col.cards, wants:col.wants, del:col.del, settings:col.settings, su:col.su || 0, friends:col.friends, fu:col.fu || 0});
+const sameData = (a, b) => JSON.stringify([a.cards || {}, a.wants || {}, a.del || {}, a.su || 0, a.fu || 0]) === JSON.stringify([b.cards || {}, b.wants || {}, b.del || {}, b.su || 0, b.fu || 0]);
 async function syncNow(){
   if(!sync?.token) return false;
   if(syncing) return syncing;
   syncing = (async () => {
     setSync("busy");
-    const before = JSON.stringify([col.cards, col.settings]);
+    const before = JSON.stringify([col.cards, col.wants, col.friends, col.settings]);
     for(let attempt = 0; attempt < 3; attempt++){
       try{
         const {data, sha} = await readRemote();
@@ -1050,7 +1294,7 @@ async function syncNow(){
         }else sync.sha = sha;
         sync.last = Date.now(); lsSet("setdex-sync", sync);
         setSync("ok", "Last synced " + new Date(sync.last).toLocaleString());
-        if(JSON.stringify([col.cards, col.settings]) !== before && !dlg.open && !/settings/.test(location.hash)) route();
+        if(JSON.stringify([col.cards, col.wants, col.friends, col.settings]) !== before && !dlg.open && !/settings/.test(location.hash)) route();
         return true;
       }catch(e){
         setSync("err", e.message === "Failed to fetch" ? "Couldn't reach GitHub. You may be offline; changes are saved on this device and will sync later." : e.message);
@@ -1079,8 +1323,10 @@ function drawSyncInfo(){
   const box = document.getElementById("syncinfo"); if(!box) return;
   if(sync){
     box.innerHTML = `<p style="margin:0">Connected to <b>${esc(sync.repo)}</b>.<br><span class="${syncState === "err" ? "" : "muted"}" style="${syncState === "err" ? "color:var(--accent)" : ""}">${esc(syncMsg || (sync.last ? "Last synced " + new Date(sync.last).toLocaleString() : ""))}</span></p>
-      <div class="chips"><button class="btn primary" id="syncnow">Sync now</button><button class="btn" id="syncoff">Disconnect this device</button></div>`;
+      <div class="chips"><button class="btn primary" id="syncnow">Sync now</button><button class="btn" id="qrbtn">Connect another device (QR code)</button><button class="btn" id="syncoff">Disconnect this device</button></div>
+      <div id="qrout"></div>`;
     document.getElementById("syncnow").onclick = () => syncNow();
+    document.getElementById("qrbtn").onclick = () => showConnectQR(document.getElementById("qrout"));
     document.getElementById("syncoff").onclick = () => {
       if(!confirm("Disconnect this device from GitHub? Your cards stay on this device and in your GitHub repository.")) return;
       sync = null; try{ localStorage.removeItem("setdex-sync"); }catch(e){}
@@ -1149,11 +1395,15 @@ function route(){
   loadToken++;
   if(dlg.open) dlg.close();
   const [view, arg, arg2] = (location.hash.replace(/^#\/?/, "") || "sets").split("/");
-  document.querySelectorAll("[data-nav]").forEach(a => a.classList.toggle("on", a.dataset.nav === (view === "set" ? "sets" : view)));
+  document.querySelectorAll("[data-nav]").forEach(a => a.classList.toggle("on", a.dataset.nav === (view === "set" ? "sets" : ["binder", "friend"].includes(view) ? "trade" : view)));
   window.scrollTo(0, 0);
   if(view === "set" && arg) viewSet(decodeURIComponent(arg), arg2 ? decodeURIComponent(arg2) : "main");
   else if(view === "collection") viewCollection();
   else if(view === "search") viewSearch();
+  else if(view === "trade") viewTrade(arg);
+  else if(view === "binder" && arg) openBinderCode(arg);
+  else if(view === "friend" && arg){ const f = col.friends[decodeURIComponent(arg)]; if(f) viewBinder(f.b, decodeURIComponent(arg)); else location.replace("#/trade/friends"); }
+  else if(view === "connect" && arg) handleConnect(arg);
   else if(view === "settings") viewSettings();
   else viewSets();
 }
