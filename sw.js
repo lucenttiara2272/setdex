@@ -1,9 +1,9 @@
 /* SetDex offline support.
    - The app itself is saved on the device, so it opens without internet.
-     It is refreshed in the background, so you get updates on the next open.
+     When online, the newest version of the page is loaded; other files refresh in the background.
    - Card pictures you've seen are kept, so sets still look complete offline.
    - GitHub (your sync) and price/exchange-rate requests are never cached here. */
-const VERSION = "setdex-v1";
+const VERSION = "setdex-v2";
 const SHELL = "shell-" + VERSION, IMAGES = "images-v1", MAX_IMAGES = 4000;
 const SHELL_FILES = ["./", "index.html", "qrcode.js", "manifest.webmanifest",
   "fonts/outfit-400.woff2", "fonts/outfit-500.woff2", "fonts/outfit-600.woff2", "fonts/outfit-700.woff2", "fonts/outfit-800.woff2",
@@ -20,7 +20,15 @@ self.addEventListener("activate", e => {
 
 async function shell(req){
   const cache = await caches.open(SHELL);
-  const key = req.mode === "navigate" ? "index.html" : req;
+  if(req.mode === "navigate"){
+    // the app page: get the newest version when online (wait at most 3 s), otherwise use the saved one
+    try{
+      const r = await Promise.race([fetch(req), new Promise((_, no) => setTimeout(() => no(new Error("slow")), 3000))]);
+      if(r.ok){ cache.put("index.html", r.clone()); return r; }
+    }catch(e){}
+    return (await cache.match("index.html")) || fetch(req);
+  }
+  const key = req;
   const hit = await cache.match(key, {ignoreSearch:true});
   const fresh = fetch(req).then(r => { if(r.ok) cache.put(key, r.clone()); return r; }).catch(() => null);
   return hit || (await fresh) || new Response("Offline", {status:503});

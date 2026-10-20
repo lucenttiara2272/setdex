@@ -796,13 +796,12 @@ async function viewSet(id, part){
   let set;
   try{ [set] = await Promise.all([getSet(id), getSets().catch(() => null)]); }
   catch(e){ main.innerHTML = failBox("Couldn't load this set. Check your internet connection."); return; }
-  if(!set.subs?.length) part = "all";
-  else if(part !== "all" && part !== "main" && !set.subs.some(x => x.id === part)) part = "main";
+  // tabs: the full set (everything in number order) · each subset · split by subset
+  if(part === "main") part = "all";
+  if(!set.subs?.length || (part !== "split" && !set.subs.some(x => x.id === part))) part = part === "split" && set.subs?.length ? "split" : "all";
   current = {set, part};
   await fillOwnPrices(set.id);   // today's prices from our own daily file, before the first paint
-  const mainCount = set.cards.filter(c => !c.part || c.inMain).length;
-  const tabs = set.subs?.length ? `<div class="tabs">${[["main", set.name, mainCount], ...set.subs.map(x => [x.id, x.name, set.cards.filter(c => c.part === x.id).length]), ["all", set.subs.length > 1 ? "All" : "Both", set.cards.length]]
-    .map(([k, n, c]) => `<a class="tab ${k === part ? "on" : ""}" href="#/set/${encodeURIComponent(set.id)}/${encodeURIComponent(k)}">${esc(n)} <span>${c}</span></a>`).join("")}</div>` : "";
+  const tabs = set.subs?.length ? `<div class="tabs" id="tabs"></div>` : "";
   main.innerHTML = `
     <a class="back" href="#/sets">← All sets</a>
     <div class="shead">
@@ -838,7 +837,7 @@ async function viewSet(id, part){
   };
   document.getElementById("reset").onclick = () => {
     const mine = partCards().filter(c => ownedCount(c.id));
-    const label = part === "all" || part === "main" || !set.subs?.length ? set.name : (set.subs.find(x => x.id === part)?.name || set.name);
+    const label = part === "all" || part === "split" || !set.subs?.length ? set.name : (set.subs.find(x => x.id === part)?.name || set.name);
     if(!mine.length){ toast(`You have no cards in ${label}`); return; }
     if(!confirm(`Remove all ${mine.length} cards you own in ${label}?\n\nYou can press Undo right after.`)) return;
     removeCards(mine.map(c => c.id), label);
@@ -858,11 +857,11 @@ async function viewSet(id, part){
     if(cardFilter === "have") cards = cards.filter(c => ownedCount(c.id));
     if(cardFilter === "need") cards = cards.filter(c => !ownedCount(c.id));
     if(cardSort === "price") cards.sort((a, b) => (priceOf(set.id, b.id, variantsOf(set.id, b.id)[0]) ?? -1) - (priceOf(set.id, a.id, variantsOf(set.id, a.id)[0]) ?? -1));
-    const sectioned = cardSort === "num" && set.subs?.length && part === "all";
+    const sectioned = cardSort === "num" && part === "split";
     let last = null;
     grid.innerHTML = cards.length ? cards.map(c => {
       let h = "";
-      const sec = c.rs ? c.sub : "";   // only separate subsets get their own heading
+      const sec = c.part ? c.sub : "";
       if(sectioned && sec !== last){ last = sec; h = `<div class="sec">${esc(sec || set.name)}</div>`; }
       return h + tileHTML(c, set.id);
     }).join("") : `<p class="muted">${cardFilter === "have" ? "No cards from this set yet." : "You have every card in this set. Nice!"}</p>`;
@@ -895,21 +894,30 @@ function missingNote(set){
 /* cards shown on the open set page: main set, one subset, or both */
 function partCards(){
   const {set, part} = current;
-  if(part === "main") return set.cards.filter(c => !c.part || c.inMain);
+  if(part === "split") return [...set.cards.filter(c => !c.part), ...(set.subs || []).flatMap(x => set.cards.filter(c => c.part === x.id))];
   if(part && part !== "all") return set.cards.filter(c => c.part === part);
   return set.cards;
 }
+/* tab row with your progress per tab, like 133/191 */
+function drawTabs(){
+  const el = document.getElementById("tabs"); if(!el || !current) return;
+  const {set, part} = current;
+  const own = list => list.filter(c => ownedCount(c.id)).length;
+  const rows = [["all", set.name, set.cards], ...set.subs.map(x => [x.id, x.name, set.cards.filter(c => c.part === x.id)]), ["split", "Split by subset", null]];
+  el.innerHTML = rows.map(([k, n, list]) => `<a class="tab ${k === part ? "on" : ""}" href="#/set/${encodeURIComponent(set.id)}/${encodeURIComponent(k)}">${esc(n)}${list ? ` <span>${own(list)}/${list.length}</span>` : ""}</a>`).join("");
+}
 function drawStats(){
+  drawTabs();
   const el = document.getElementById("stats");
   if(!el || !current) return;
   const set = current.set, s = setStats(set, partCards());
   const p = pct(s.uniq, s.total);
   const partial = s.priced < s.total ? `<div class="sub faint">${s.known < s.total ? "loading…" : `${s.total - s.priced} cards have no price`}</div>` : "";
   el.innerHTML = `
-    <div class="stat panel hero"><div class="lb">${current.part === "all" || current.part === "main" || !set.subs?.length ? "Set progress" : esc(set.subs.find(x => x.id === current.part)?.name || "") + " progress"}</div>
+    <div class="stat panel hero"><div class="lb">${current.part === "all" || current.part === "split" || !set.subs?.length ? "Set progress" : esc(set.subs.find(x => x.id === current.part)?.name || "") + " progress"}</div>
       <div class="vl">${s.uniq} <span class="faint">/ ${s.total}</span> <span style="font-size:17px" class="muted">${p}%</span></div>
       <div class="bar ${s.uniq && s.uniq >= s.total ? "done" : ""}"><i style="width:${p}%"></i></div>
-      <div class="sub">${s.offTotal ? `Main set ${s.offOwned}/${s.offTotal} · ` : ""}Master set ${s.masterOwned}/${s.master} (all variants)</div></div>
+      <div class="sub">${s.offTotal && (current.part === "all" || current.part === "split" || !set.subs?.length) ? `Main set ${s.offOwned}/${s.offTotal} · ` : ""}Master set ${s.masterOwned}/${s.master} (all variants)</div></div>
     <div class="stat panel"><div class="lb">Set value</div><div class="vl">${money(s.setVal)}</div><div class="sub">One of every card</div>${partial}</div>
     <div class="stat panel"><div class="lb">Master set value</div><div class="vl">${money(s.masterVal)}</div><div class="sub">Every variant</div></div>
     <div class="stat panel"><div class="lb">My cards</div><div class="vl" style="color:var(--good)">${money(s.myVal)}</div><div class="sub">${pct(s.myVal, s.masterVal)}% of master value</div></div>`;
@@ -1560,7 +1568,7 @@ function route(){
   const [view, arg, arg2] = (location.hash.replace(/^#\/?/, "") || "sets").split("/");
   document.querySelectorAll("[data-nav]").forEach(a => a.classList.toggle("on", a.dataset.nav === (view === "set" ? "sets" : ["binder", "friend"].includes(view) ? "trade" : view)));
   window.scrollTo(0, 0);
-  if(view === "set" && arg) viewSet(decodeURIComponent(arg), arg2 ? decodeURIComponent(arg2) : "main");
+  if(view === "set" && arg) viewSet(decodeURIComponent(arg), arg2 ? decodeURIComponent(arg2) : "all");
   else if(view === "collection") viewCollection();
   else if(view === "search") viewSearch();
   else if(view === "trade") viewTrade(arg);
