@@ -13,6 +13,15 @@ A free Pokémon TCG collection tracker. Track every set and subset card by card,
 - **Trading:** mark cards **for trade**, keep a **wants** list, and share your binder with friends as a link. Their app shows what you can swap, and what it's worth.
 - Sync with a private GitHub repository, so your collection is the same on every device. Connect your phone by scanning a QR code.
 
+## Install it as an app (works offline)
+**iPhone:** open the app link in **Safari** → tap **Share** → **Add to Home Screen** → **Add**.
+**Android:** open the app link in **Chrome** → tap **⋮** → **Install app** (or **Add to Home screen**). Settings in the app also has an **Install SetDex** button when your phone supports it.
+
+Once installed, SetDex has its own icon, opens full screen, and **works without internet**:
+- Changes you make offline are saved on the phone and sync when you're back online. Card by card, the newest change wins.
+- Pictures of cards you've seen before are kept, so your sets still look complete.
+- Prices and new sets need internet. The app shows the last prices it saved.
+
 ## Trading with friends
 1. Open a card you own and use the **For trade** counter, or press **Trade → Put my duplicates up for trade** (you keep one of each).
 2. Add cards you're looking for to your **wants**: open a card and press **♡ Add to wants**, or open a set and press **♡ Want missing**. Cards leave the list by themselves when you add them to your collection.

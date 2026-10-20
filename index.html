@@ -7,6 +7,14 @@
 <meta name="description" content="Track your Pokémon TCG collection set by set and see what it is worth.">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self'; connect-src https://api.tcgdex.net https://api.frankfurter.dev https://api.frankfurter.app https://api.github.com; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/favicon-64.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="theme-color" content="#141A26">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="SetDex">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <style>
 @font-face{font-family:"Outfit";font-weight:400;font-display:swap;src:url(fonts/outfit-400.woff2) format("woff2")}
 @font-face{font-family:"Outfit";font-weight:500;font-display:swap;src:url(fonts/outfit-500.woff2) format("woff2")}
@@ -42,8 +50,6 @@ img{display:block}
 .top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
 .top-in{max-width:1180px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:14px}
 .brand{display:flex;align-items:center;gap:8px;font-weight:800;font-size:19px;letter-spacing:-.02em;text-decoration:none}
-.brand-ball{width:22px;height:22px;border-radius:50%;background:linear-gradient(var(--accent) 0 46%,var(--ink) 46% 54%,#fff 54%);border:2px solid var(--ink);position:relative}
-.brand-ball::after{content:"";position:absolute;inset:6px;border-radius:50%;background:#fff;border:2px solid var(--ink)}
 nav{display:flex;gap:4px;margin-left:auto;overflow-x:auto}
 nav a{padding:7px 12px;border-radius:999px;text-decoration:none;color:var(--ink-2);font-weight:600;white-space:nowrap;font-size:14px}
 nav a.on{background:var(--ink);color:var(--bg)}
@@ -118,6 +124,9 @@ h2{font-size:17px;margin:26px 0 10px;letter-spacing:-.01em}
 .sharebox{display:grid;gap:8px}
 .qrbox{background:#fff;padding:12px;border-radius:12px;width:max-content;max-width:100%}
 .qrbox svg{display:block;width:240px;height:240px}
+.brand-icon{width:26px;height:26px;border-radius:7px}
+@media (max-width:480px){.brand-icon{width:28px;height:28px}}
+.top{padding-top:env(safe-area-inset-top)}
 .sets-group{margin:22px 0 10px;font-size:15px;font-weight:700;color:var(--ink-2);display:flex;align-items:center;gap:10px}
 .sets-group::after{content:"";flex:1;height:1px;background:var(--line)}
 .mark{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-3);min-height:20px}
@@ -205,7 +214,7 @@ dialog::backdrop{background:rgba(8,10,16,.6)}
 </head>
 <body>
 <header class="top"><div class="top-in">
-  <a class="brand" href="#/sets"><span class="brand-ball"></span>SetDex</a>
+  <a class="brand" href="#/sets"><img class="brand-icon" src="icons/icon-192.png" alt="" width="26" height="26">SetDex</a>
   <nav>
     <a href="#/sets" data-nav="sets">Sets</a>
     <a href="#/collection" data-nav="collection">Collection</a>
@@ -976,6 +985,8 @@ function viewSettings(){
       <div id="fxinfo" class="muted" style="font-size:14px"></div>
       <div id="manual"></div>
     </div>
+    <h2>Install on your phone</h2>
+    <div class="panel set-form" id="installbox"></div>
     <h2>Sync with GitHub</h2>
     <div class="panel set-form" id="syncinfo"></div>
     <h2>Backup</h2>
@@ -994,6 +1005,7 @@ function viewSettings(){
       <div><button class="btn" id="clr">Clear saved card data</button></div>
     </div>`;
   drawSyncInfo();
+  drawInstall();
   const cur = document.getElementById("cur"); cur.value = s.currency;
   const drawFx = () => {
     const c = s.currency;
@@ -1388,6 +1400,29 @@ function drawSyncInfo(){
       }
     };
   }
+}
+
+/* ---------- install as an app + offline ---------- */
+let installEvt = null;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEvt = e; drawInstall(); });
+window.addEventListener("appinstalled", () => { installEvt = null; toast("SetDex is installed"); drawInstall(); });
+const canOffline = () => "serviceWorker" in navigator && location.protocol !== "file:" && window.isSecureContext;
+const isInstalled = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+function drawInstall(){
+  const box = document.getElementById("installbox"); if(!box) return;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const offline = canOffline();
+  if(isInstalled()){ box.innerHTML = `<p style="margin:0">✓ SetDex is installed on this device${offline ? " and works offline" : ""}.</p>`; return; }
+  if(!canOffline()){ box.innerHTML = `<p class="muted" style="margin:0">Open the online version to install it: <a href="${esc(APP_URL)}">${esc(APP_URL)}</a></p>`; return; }
+  box.innerHTML = `<p class="muted" style="margin:0">Install SetDex to get an app icon on your home screen. It opens full screen and works without internet. Cards you've seen before keep their pictures.</p>
+    ${installEvt ? `<div><button class="btn primary" id="instbtn">Install SetDex</button></div>` : ios
+      ? `<ol class="glist"><li>Open this page in <b>Safari</b>.</li><li>Tap the <b>Share</b> button (the square with an arrow).</li><li>Tap <b>Add to Home Screen</b>, then <b>Add</b>.</li></ol>`
+      : `<ol class="glist"><li>Open this page in <b>Chrome</b>.</li><li>Tap the <b>⋮</b> menu at the top right.</li><li>Tap <b>Add to Home screen</b> or <b>Install app</b>.</li></ol>`}`;
+  const b = document.getElementById("instbtn");
+  if(b) b.onclick = async () => { installEvt.prompt(); await installEvt.userChoice.catch(() => {}); installEvt = null; drawInstall(); };
+}
+if(canOffline()){
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
 }
 
 /* ---------- router ---------- */
