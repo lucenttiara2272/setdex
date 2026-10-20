@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>SetDex</title>
 <meta name="description" content="Track your Pokémon TCG collection set by set and see what it is worth.">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self'; connect-src https://api.tcgdex.net https://api.frankfurter.dev https://api.frankfurter.app https://api.github.com; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self'; connect-src 'self' https://api.tcgdex.net https://api.frankfurter.dev https://api.frankfurter.app https://api.github.com; object-src 'none'; base-uri 'none'; form-action 'none'">
 <meta name="referrer" content="no-referrer">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" href="icons/favicon-64.png">
@@ -127,6 +127,10 @@ h2{font-size:17px;margin:26px 0 10px;letter-spacing:-.01em}
 .brand-icon{width:26px;height:26px;border-radius:7px}
 @media (max-width:480px){.brand-icon{width:28px;height:28px}}
 .top{padding-top:env(safe-area-inset-top)}
+.legal-foot{max-width:1180px;margin:0 auto;padding:0 16px 90px;font-size:12px;color:var(--ink-3)}
+.legal-foot a{color:var(--ink-2)}
+.legal p{margin:0;font-size:14px;color:var(--ink-2)}
+.legal p b{color:var(--ink)}
 .sets-group{margin:22px 0 10px;font-size:15px;font-weight:700;color:var(--ink-2);display:flex;align-items:center;gap:10px}
 .sets-group::after{content:"";flex:1;height:1px;background:var(--line)}
 .mark{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-3);min-height:20px}
@@ -225,6 +229,7 @@ dialog::backdrop{background:rgba(8,10,16,.6)}
   <a class="syncst" id="syncst" href="#/settings" hidden></a>
 </div></header>
 <main id="main"></main>
+<footer class="legal-foot">SetDex is an unofficial fan project, not affiliated with Nintendo, The Pokémon Company, Creatures or GAME FREAK. <a href="#/settings/about">About &amp; legal</a></footer>
 <dialog id="dlg"></dialog>
 <div class="toast" id="toast"></div>
 
@@ -367,10 +372,25 @@ async function cached(key, path, map){
     return d;
   }catch(e){ if(c) return c.d; throw e; }
 }
+/* SetDex's own copy of the card database (data/, updated weekly by GitHub Actions).
+   It's used first; the TCGdex API fills in anything newer, and is used by the local file version. */
+const OWN_DATA = location.protocol !== "file:";
+async function ownData(file){
+  if(!OWN_DATA) return null;
+  try{ const r = await fetch("data/" + file, {cache:"no-cache"}); if(r.ok) return await r.json(); }catch(e){}
+  return null;
+}
 let setsList = null;
 async function getSets(){
   if(setsList) return setsList;
-  setsList = await cached("setdex-sets", "/sets", d => d.map(s => ({id:s.id, name:s.name, logo:s.logo||"", symbol:s.symbol||"", total:s.cardCount?.total||0, official:s.cardCount?.official||0})));
+  const [own, api] = await Promise.all([
+    ownData("sets.json"),
+    cached("setdex-sets", "/sets", d => d.map(s => ({id:s.id, name:s.name, logo:s.logo||"", symbol:s.symbol||"", total:s.cardCount?.total||0, official:s.cardCount?.official||0}))).catch(e => null)
+  ]);
+  if(!own && !api) throw new Error("no set list");
+  const mine = own ? own.sets.map(s => ({id:s.id, name:s.name, logo:s.logo || "", symbol:s.symbol || "", logoFile:s.logoFile || "", symbolFile:s.symbolFile || "", total:s.total || 0, official:s.official || 0})) : [];
+  const known = new Set(mine.map(s => s.id));
+  setsList = [...mine, ...(api || []).filter(s => !known.has(s.id))];   // sets newer than our copy come from the API
   return setsList;
 }
 const setMeta = id => (setsList || []).find(s => s.id === id);
@@ -396,12 +416,14 @@ async function getSet(id){
   return setMem[id] = d;
 }
 async function getSetRaw(id){
-  const d = await cached("setdex-set-" + id, "/sets/" + encodeURIComponent(id), s => ({
+  const map = s => ({
     id:s.id, name:s.name, logo:s.logo||"", symbol:s.symbol||"", serie:s.serie?.name||"", releaseDate:s.releaseDate||"",
     total:s.cardCount?.total||(s.cards||[]).length, official:s.cardCount?.official||0,
     cards:(s.cards||[]).map(c => ({id:c.id, localId:String(c.localId), name:c.name, image:c.image||""}))
-  }));
-  return d;
+  });
+  const own = /^[\w.-]+$/.test(id) ? await ownData("sets/" + id + ".json") : null;
+  if(own && own.cards) return map(own);
+  return cached("setdex-set-" + id, "/sets/" + encodeURIComponent(id), map);
 }
 /* card total for a main set including its subsets */
 const setTotal = id => (setMeta(id)?.total || 0) + (CHILDREN[id] || []).reduce((a, c) => a + (setMeta(c)?.total || 0), 0);
@@ -582,9 +604,10 @@ function logoUrls(s){
   const alt = sid ? LANGS.map(l => `https://assets.tcgdex.net/${l}/${sid}/${s.id}/logo.webp`) : [];
   const cover = sid ? ["en","fr"].map(l => `https://assets.tcgdex.net/${l}/${sid}/${s.id}/1/low.webp`) : [];
   // TCGdex logo, then the Pokémon TCG API logo, then other languages, then the first card as a cover
-  return [...(s.logo ? [logo(s.logo)] : []), ptcgArt(s.id, "logo"), ...alt.slice(1), ...cover].filter(Boolean);
+  const own = s.logoFile || setMeta(s.id)?.logoFile || "";
+  return [own, ...(s.logo ? [logo(s.logo)] : []), ptcgArt(s.id, "logo"), ...alt.slice(1), ...cover].filter(Boolean);
 }
-const symUrls = s => [s.symbol ? s.symbol + ".webp" : "", ptcgArt(s.id, "symbol")].filter(Boolean);
+const symUrls = s => [s.symbolFile || setMeta(s.id)?.symbolFile || "", s.symbol ? s.symbol + ".webp" : "", ptcgArt(s.id, "symbol")].filter(Boolean);
 function markHTML(s, withYear){
   const i = sinfo(s.id), sym = symUrls(s);
   const date = i.date || s.releaseDate || "";
@@ -1004,9 +1027,24 @@ function viewSettings(){
       <p class="muted" style="margin:0">Remove every card from your collection. Your settings stay. To reset one set only, open it and press <b>Reset</b>.</p>
       <div><button class="btn danger" id="wipe">Remove all my cards</button></div>
     </div>
+    <h2 id="about">About &amp; legal</h2>
+    <div class="panel set-form legal">
+      <p><b>SetDex is a free, unofficial, fan-made tool</b> for keeping track of a Pokémon TCG collection. It isn't produced, endorsed, sponsored, supported or approved by Nintendo, The Pokémon Company, Creatures Inc. or GAME FREAK, and it isn't affiliated with them in any way.</p>
+      <p><b>We don't own any of the Pokémon content shown in the app.</b> Pokémon, the Pokémon Trading Card Game, all Pokémon and character names, set names, set logos and symbols, card names, card text and card artwork are trademarks and/or copyrights of their owners: © Nintendo, Creatures Inc., GAME FREAK inc. and The Pokémon Company. They're shown only to identify cards and sets, and no ownership of them is claimed.</p>
+      <p><b>Where the information comes from</b></p>
+      <ul class="glist">
+        <li>Card and set data: <a href="https://tcgdex.dev" target="_blank" rel="noopener">TCGdex</a>, used under the MIT license.</li>
+        <li>Card pictures, set logos and symbols: TCGdex and the <a href="https://pokemontcg.io" target="_blank" rel="noopener">Pokémon TCG API</a>.</li>
+        <li>Prices: Cardmarket trend prices through TCGdex (TCGplayer when Cardmarket has none). These are estimates, not offers or advice.</li>
+        <li>Exchange rates: European Central Bank, through <a href="https://frankfurter.dev" target="_blank" rel="noopener">Frankfurter</a>.</li>
+      </ul>
+      <p><b>Your privacy:</b> SetDex has no ads, no tracking and no accounts of its own. Your collection is stored in your browser and, if you turn on sync, in your own private GitHub repository. Share links contain only the cards you choose to share.</p>
+      <p><b>Rights holders:</b> if you'd like any material removed, <a href="https://github.com/lucenttiara2272/setdex/issues" target="_blank" rel="noopener">open an issue on GitHub</a> and it will be taken down promptly.</p>
+      <p class="faint">The SetDex app is free and open source. Pokémon content remains the property of its owners.</p>
+    </div>
     <h2>Price data</h2>
     <div class="panel set-form">
-      <p class="muted" style="margin:0">Card data, pictures and prices come from the free <a href="https://tcgdex.dev" target="_blank" rel="noopener">TCGdex</a> database. Prices are Cardmarket trend prices in euro and update once a day. Other currencies are converted with the exchange rate above. Values are estimates, not what a shop will pay.</p>
+      <p class="muted" style="margin:0">Card data, pictures and prices come from the free <a href="https://tcgdex.dev" target="_blank" rel="noopener">TCGdex</a> database. The set list and card lists are a copy SetDex keeps itself and updates every week. Prices are Cardmarket trend prices in euro and update once a day. Other currencies are converted with the exchange rate above. Values are estimates, not what a shop will pay.</p>
       <div><button class="btn" id="clr">Clear saved card data</button></div>
     </div>`;
   drawSyncInfo();
@@ -1444,7 +1482,7 @@ function route(){
   else if(view === "binder" && arg) openBinderCode(arg);
   else if(view === "friend" && arg){ const f = col.friends[decodeURIComponent(arg)]; if(f) viewBinder(f.b, decodeURIComponent(arg)); else location.replace("#/trade/friends"); }
   else if(view === "connect" && arg) handleConnect(arg);
-  else if(view === "settings") viewSettings();
+  else if(view === "settings"){ viewSettings(); if(arg === "about") setTimeout(() => document.getElementById("about")?.scrollIntoView(), 50); }
   else viewSets();
 }
 window.addEventListener("hashchange", route);

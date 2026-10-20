@@ -88,3 +88,15 @@ Otherwise, do step 3 once on every phone and computer. The token is stored only 
 - Exchange rates: European Central Bank, via [Frankfurter](https://frankfurter.dev).
 
 Prices are estimates of the market value, not what a shop will pay.
+
+## Card data copy
+The set list, card lists, set logos and symbols are copied into [`data/`](data/) every Monday by the **Update card data** GitHub Action ([`scripts/build-data.mjs`](scripts/build-data.mjs)). The app loads them from this site first, so it's faster and works offline. Sets newer than the copy are still fetched from TCGdex. Card pictures and prices aren't copied; they're loaded live. To update right away, go to **Actions → Update card data → Run workflow**.
+
+## Legal
+SetDex is a free, unofficial, fan-made tool. It isn't produced, endorsed, sponsored, supported or approved by Nintendo, The Pokémon Company, Creatures Inc. or GAME FREAK, and it isn't affiliated with them in any way.
+
+Pokémon, the Pokémon Trading Card Game, all Pokémon and character names, set names, set logos and symbols, card names, card text and card artwork are trademarks and/or copyrights of their owners (© Nintendo, Creatures Inc., GAME FREAK inc., The Pokémon Company). They're shown only to identify cards and sets, and no ownership of them is claimed.
+
+Card data comes from [TCGdex](https://github.com/tcgdex/cards-database) and is used under the MIT license (see [`data/LICENSE-TCGdex.txt`](data/LICENSE-TCGdex.txt)).
+
+**Rights holders:** if you'd like any material removed, please [open an issue](https://github.com/lucenttiara2272/setdex/issues) and it will be taken down promptly.

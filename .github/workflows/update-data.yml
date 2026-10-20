@@ -1,0 +1,47 @@
+name: Update card data
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"   # every Monday, 04:17 UTC
+  workflow_dispatch:       # "Run workflow" button on GitHub
+  push:
+    branches: [main]
+    paths:
+      - "scripts/build-data.mjs"
+      - ".github/workflows/update-data.yml"
+
+permissions:
+  contents: write
+  pages: write
+
+concurrency:
+  group: update-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Copy sets, cards, logos and symbols
+        run: node scripts/build-data.mjs
+      - name: Save changes
+        id: save
+        run: |
+          git add data
+          if git diff --cached --quiet; then
+            echo "No changes"; echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "Update card data"
+            git push
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Publish the site
+        if: steps.save.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api -X POST "repos/${{ github.repository }}/pages/builds" || echo "Pages will update on its own"
