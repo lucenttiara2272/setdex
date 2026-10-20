@@ -59,6 +59,33 @@ async function pool(items, n, fn){
   return out;
 }
 
+// TCGdex's source files (cloned by the workflow) are sometimes ahead of its live API,
+// e.g. the RGB Mews in 30th Celebration. Cards found there but not in the API are added.
+const repoCards = {};
+if(process.env.TCGDEX_REPO){
+  const base = path.join(process.env.TCGDEX_REPO, "data");
+  for(const serie of await fs.readdir(base, {withFileTypes:true})){
+    if(!serie.isDirectory()) continue;
+    for(const f of await fs.readdir(path.join(base, serie.name))){
+      if(!f.endsWith(".ts")) continue;
+      const src = await fs.readFile(path.join(base, serie.name, f), "utf8");
+      const id = (src.match(/\bid:\s*["']([^"']+)["']/) || [])[1];
+      const dir = path.join(base, serie.name, f.slice(0, -3));
+      if(!id) continue;
+      const files = await fs.readdir(dir).catch(() => []);
+      repoCards[id] = [];
+      for(const cf of files){
+        if(!cf.endsWith(".ts")) continue;
+        const cs = await fs.readFile(path.join(dir, cf), "utf8");
+        const name = (cs.match(/\bname:\s*\{[^}]*?\ben:\s*(["'])(.*?)\1/s) || [])[2];
+        if(name) repoCards[id].push({localId:cf.slice(0, -3), name});
+      }
+    }
+  }
+  console.log(`Read ${Object.keys(repoCards).length} sets from the TCGdex source files`);
+}
+const byNumber = (a, b) => (parseInt(a.localId, 10) || 1e9) - (parseInt(b.localId, 10) || 1e9) || a.localId.localeCompare(b.localId);
+
 const list = await getJSON(API + "/sets");
 if(!Array.isArray(list) || list.length < 100) throw new Error("Set list looks wrong, stopping so nothing gets deleted");
 let changed = 0;
@@ -66,8 +93,11 @@ const sets = (await pool(list, 6, async s => {
   const d = await getJSON(`${API}/sets/${encodeURIComponent(s.id)}`);
   if(!d || d.serie?.id === "tcgp") return null;   // TCG Pocket is a phone game, not physical cards
   const cards = (d.cards || []).map(c => ({id:c.id, localId:String(c.localId), name:c.name, ...(c.image ? {image:c.image} : {})}));
+  const have = new Set(cards.map(c => c.localId));
+  const extra = (repoCards[d.id] || []).filter(c => !have.has(c.localId)).sort(byNumber).map(c => ({id:`${d.id}-${c.localId}`, localId:c.localId, name:c.name}));
+  if(extra.length){ cards.push(...extra); console.log(`${d.id}: added ${extra.length} cards from the source files (${extra.map(c => c.localId).join(", ")})`); }
   const set = {id:d.id, name:d.name, logo:d.logo || "", symbol:d.symbol || "", serie:{id:d.serie?.id || "", name:d.serie?.name || ""},
-    releaseDate:d.releaseDate || "", cardCount:{total:d.cardCount?.total ?? cards.length, official:d.cardCount?.official ?? 0}, cards};
+    releaseDate:d.releaseDate || "", cardCount:{total:Math.max(d.cardCount?.total ?? 0, cards.length), official:d.cardCount?.official ?? 0}, cards};
   if(await writeIfChanged(path.join(OUT, "sets", `${d.id}.json`), JSON.stringify(set))) changed++;
   const logoFile = await image([d.logo && d.logo + ".webp", d.logo && d.logo + ".png", ptcgArt(d.id, "logo")], path.join(OUT, "logos", d.id));
   const symbolFile = await image([d.symbol && d.symbol + ".webp", d.symbol && d.symbol + ".png", ptcgArt(d.id, "symbol")], path.join(OUT, "symbols", d.id));
