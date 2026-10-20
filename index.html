@@ -438,8 +438,21 @@ async function getSetRaw(id){
     cards:(s.cards||[]).map(c => ({id:c.id, localId:String(c.localId), name:c.name, image:c.image||""}))
   });
   const own = /^[\w.-]+$/.test(id) ? await ownData("sets/" + id + ".json") : null;
-  if(own && own.cards) return map(own);
-  return cached("setdex-set-" + id, "/sets/" + encodeURIComponent(id), map);
+  const d = own && own.cards ? map(own) : await cached("setdex-set-" + id, "/sets/" + encodeURIComponent(id), map);
+  d.cards = naturalOrder(d.cards);
+  return d;
+}
+/* card number order: 1, 2 … 10 (not 1, 10, 2), plain numbers first, then each letter group (RC1, RC2 … / SV1, SV2 …) */
+function naturalOrder(cards){
+  const groups = new Map([["", 0]]);
+  const key = c => {
+    const m = String(c.localId).match(/^([A-Za-z-]*)(\d*)(.*)$/) || ["", "", "", c.localId];
+    if(!groups.has(m[1])) groups.set(m[1], groups.size);
+    return [groups.get(m[1]), m[2] === "" ? Infinity : +m[2], m[3]];
+  };
+  const keyed = cards.map((c, i) => ({c, k:key(c), i}));
+  keyed.sort((a, b) => a.k[0] - b.k[0] || a.k[1] - b.k[1] || a.k[2].localeCompare(b.k[2]) || a.i - b.i);
+  return keyed.map(x => x.c);
 }
 /* card total for a main set including its subsets */
 const setTotal = id => (setMeta(id)?.total || 0) + (CHILDREN[id] || []).reduce((a, c) => a + (setMeta(c)?.total || 0), 0);
