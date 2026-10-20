@@ -1,0 +1,1137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>SetDex</title>
+<meta name="description" content="Track your Pokémon TCG collection set by set and see what it is worth.">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data: blob:; font-src 'self'; connect-src https://api.tcgdex.net https://api.frankfurter.dev https://api.frankfurter.app https://api.github.com; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<style>
+@font-face{font-family:"Outfit";font-weight:400;font-display:swap;src:url(fonts/outfit-400.woff2) format("woff2")}
+@font-face{font-family:"Outfit";font-weight:500;font-display:swap;src:url(fonts/outfit-500.woff2) format("woff2")}
+@font-face{font-family:"Outfit";font-weight:600;font-display:swap;src:url(fonts/outfit-600.woff2) format("woff2")}
+@font-face{font-family:"Outfit";font-weight:700;font-display:swap;src:url(fonts/outfit-700.woff2) format("woff2")}
+@font-face{font-family:"Outfit";font-weight:800;font-display:swap;src:url(fonts/outfit-800.woff2) format("woff2")}
+:root{
+  color-scheme:light;
+  --bg:#F2F3F7; --surface:#FFFFFF; --surface-2:#ECEEF3; --line:#DCE0E8;
+  --ink:#141A26; --ink-2:#4A5468; --ink-3:#8590A3;
+  --accent:#E3350D; --accent-soft:#FDE6E0; --good:#16925F; --good-soft:#DDF3E9;
+  --shadow:0 1px 2px rgba(20,26,38,.06),0 6px 18px rgba(20,26,38,.07);
+  --r:14px;
+  --font:"Outfit",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    color-scheme:dark;
+    --bg:#0E1118; --surface:#171B25; --surface-2:#202533; --line:#2B3140;
+    --ink:#EEF1F7; --ink-2:#A9B2C3; --ink-3:#6F7A8D;
+    --accent:#FF5A36; --accent-soft:#3A1E18; --good:#3CCB8E; --good-soft:#123227;
+    --shadow:0 1px 0 rgba(255,255,255,.03);
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font-family:var(--font);font-size:15px;line-height:1.4;-webkit-font-smoothing:antialiased;min-height:100vh}
+button,input,select{font:inherit;color:inherit}
+a{color:inherit}
+img{display:block}
+
+/* top bar */
+.top{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top-in{max-width:1180px;margin:0 auto;padding:10px 16px;display:flex;align-items:center;gap:14px}
+.brand{display:flex;align-items:center;gap:8px;font-weight:800;font-size:19px;letter-spacing:-.02em;text-decoration:none}
+.brand-ball{width:22px;height:22px;border-radius:50%;background:linear-gradient(var(--accent) 0 46%,var(--ink) 46% 54%,#fff 54%);border:2px solid var(--ink);position:relative}
+.brand-ball::after{content:"";position:absolute;inset:6px;border-radius:50%;background:#fff;border:2px solid var(--ink)}
+nav{display:flex;gap:4px;margin-left:auto;overflow-x:auto}
+nav a{padding:7px 12px;border-radius:999px;text-decoration:none;color:var(--ink-2);font-weight:600;white-space:nowrap;font-size:14px}
+nav a.on{background:var(--ink);color:var(--bg)}
+main{max-width:1180px;margin:0 auto;padding:18px 16px 80px}
+
+/* generic */
+h1{font-size:26px;line-height:1.15;margin:0;letter-spacing:-.02em}
+h2{font-size:17px;margin:26px 0 10px;letter-spacing:-.01em}
+.muted{color:var(--ink-2)}
+.faint{color:var(--ink-3)}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+.btn{border:1px solid var(--line);background:var(--surface);padding:8px 14px;border-radius:10px;font-weight:600;cursor:pointer}
+.btn:hover{border-color:var(--ink-3)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+.input{width:100%;border:1px solid var(--line);background:var(--surface);padding:11px 14px;border-radius:12px;outline:none}
+.input:focus{border-color:var(--accent)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);background:var(--surface);padding:6px 12px;border-radius:999px;font-weight:600;font-size:13px;cursor:pointer;color:var(--ink-2)}
+.chip.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.bar{height:8px;border-radius:99px;background:var(--surface-2);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .3s}
+.bar.done i{background:var(--good)}
+.center{padding:60px 0;text-align:center;color:var(--ink-2)}
+.spin{width:28px;height:28px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp 0.8s linear infinite;margin:0 auto 12px}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+/* sets list */
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:14px 0}
+.toolbar .input{flex:1;min-width:200px}
+.sets{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.setc{display:flex;flex-direction:column;gap:8px;padding:12px;text-decoration:none}
+.setc:hover{border-color:var(--ink-3)}
+.setc .logo{height:54px;display:flex;align-items:center;justify-content:center}
+.setc .logo img{max-height:54px;max-width:100%;object-fit:contain}
+.setc .logo .ph{font-weight:800;color:var(--ink-3);font-size:22px;letter-spacing:.04em;text-align:center}
+.setc .nm{font-weight:600;font-size:14px;line-height:1.2;min-height:2.4em}
+.grid .sec{grid-column:1/-1;font-weight:700;color:var(--ink-2);margin-top:10px;border-bottom:1px solid var(--line);padding-bottom:6px}
+.setc .incl{font-size:12px;font-weight:600;color:var(--accent);margin-top:2px}
+.setc .logo img.cover{height:54px;width:auto;border-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,.3)}
+.tabs{display:flex;gap:4px;margin-top:16px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tab{padding:9px 14px;text-decoration:none;font-weight:600;color:var(--ink-2);border-bottom:3px solid transparent;margin-bottom:-1px;white-space:nowrap}
+.tab span{font-size:12px;color:var(--ink-3);font-weight:500}
+.tab.on{color:var(--ink);border-bottom-color:var(--accent)}
+.setc .incl{cursor:pointer}
+.setc .incl:hover{text-decoration:underline}
+.note{margin-top:14px;padding:10px 14px;border-radius:12px;background:var(--accent-soft);color:var(--ink);font-size:14px}
+.syncst{font-size:12px;font-weight:600;color:var(--ink-3);text-decoration:none;white-space:nowrap;display:flex;align-items:center;gap:5px}
+.syncst::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--ink-3)}
+.syncst.ok::before{background:var(--good)} .syncst.busy::before{background:#E0A100} .syncst.err{color:var(--accent)} .syncst.err::before{background:var(--accent)}
+@media (max-width:480px){.syncst span{display:none}}
+.steps{margin:0;padding-left:20px;color:var(--ink-2);font-size:14px;display:grid;gap:4px}
+.sets-group{margin:22px 0 10px;font-size:15px;font-weight:700;color:var(--ink-2);display:flex;align-items:center;gap:10px}
+.sets-group::after{content:"";flex:1;height:1px;background:var(--line)}
+.mark{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-3);min-height:20px}
+.mark .sym{width:20px;height:20px;object-fit:contain}
+.code{font-weight:700;font-size:11px;letter-spacing:.04em;padding:2px 6px;border-radius:5px;background:var(--surface-2);color:var(--ink);border:1px solid var(--line)}
+.mark .yr{margin-left:auto}
+.shead .logo:empty{display:none}
+.shead .mark{margin-top:6px;font-size:13px}
+.shead .mark .sym{width:26px;height:26px}
+.noimg{flex-direction:column;gap:4px;font-weight:600}
+.noimg b{font-size:18px;color:var(--ink-2)}
+.setc .ct{display:flex;justify-content:space-between;font-size:12px;color:var(--ink-3)}
+
+/* set head */
+.back{display:inline-flex;gap:6px;align-items:center;text-decoration:none;color:var(--ink-2);font-weight:600;margin-bottom:12px}
+.shead{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.shead .logo{width:150px;height:70px;display:flex;align-items:center}
+.shead .logo img{max-width:100%;max-height:70px;object-fit:contain}
+.stats{display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr;gap:10px;margin-top:16px}
+.stat{padding:14px 16px}
+.stat .lb{font-size:12px;font-weight:600;color:var(--ink-3);text-transform:uppercase;letter-spacing:.06em}
+.stat .vl{font-size:24px;font-weight:700;letter-spacing:-.02em;margin-top:2px;font-variant-numeric:tabular-nums}
+.stat .sub{font-size:13px;color:var(--ink-2);margin-top:4px}
+.stat .bar{margin-top:10px}
+.stat.hero .vl{font-size:30px}
+@media (max-width:780px){.stats{grid-template-columns:1fr 1fr 1fr;gap:8px}.stat.hero{grid-column:1/-1}.stat{padding:12px}.stat:not(.hero) .vl{font-size:18px}.stat .lb{font-size:10.5px}.stat .sub{font-size:12px}}
+@media (max-width:480px){.brand{font-size:0;gap:0}nav{margin-left:0}nav a{padding:7px 10px}}
+.loadnote{font-size:13px;color:var(--ink-3);margin-left:auto}
+
+/* card grid */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(128px,1fr));gap:12px}
+@media (max-width:480px){.grid{grid-template-columns:repeat(3,1fr);gap:8px}}
+.tile{position:relative}
+.tile .art{all:unset;cursor:pointer;display:block;border-radius:7px;overflow:hidden;aspect-ratio:245/342;background:var(--surface-2);width:100%}
+.tile .art img{width:100%;height:100%;object-fit:cover;transition:filter .2s,opacity .2s}
+.tile:not(.own) .art img{filter:grayscale(1);opacity:.42}
+.tile .art .noimg{height:100%;display:flex;align-items:center;justify-content:center;text-align:center;padding:8px;font-size:12px;color:var(--ink-3)}
+.tile .meta{display:flex;justify-content:space-between;gap:4px;font-size:12px;margin-top:5px;font-variant-numeric:tabular-nums}
+.tile .num{color:var(--ink-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tile .price{font-weight:600;white-space:nowrap}
+.tile .vd{display:flex;gap:3px;margin-top:4px;min-height:6px}
+.tile .vd i{width:14px;height:5px;border-radius:3px;background:var(--line)}
+.tile .vd i.on{background:var(--good)}
+.tile .qc{position:absolute;right:6px;top:6px;display:flex;align-items:center;border-radius:999px;background:var(--ink);box-shadow:0 2px 8px rgba(0,0,0,.3)}
+.tile.own .qc{background:var(--good)}
+.tile .qc button{width:30px;height:30px;border:0;background:none;color:var(--bg);font-size:20px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.tile.own .qc button{color:#fff}
+.tile .qc .cnt{min-width:14px;text-align:center;color:#fff;font-weight:700;font-size:13px;font-variant-numeric:tabular-nums}
+.btn.danger{color:var(--accent);border-color:var(--accent)}
+.btn.small{padding:5px 12px;font-size:13px}
+.tile .sname{font-size:11px;color:var(--ink-3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* modal */
+dialog{border:0;padding:0;border-radius:18px;background:var(--surface);color:var(--ink);max-width:min(760px,calc(100vw - 24px));width:100%;box-shadow:0 20px 60px rgba(0,0,0,.35)}
+dialog::backdrop{background:rgba(8,10,16,.6)}
+.md{display:grid;grid-template-columns:260px 1fr;gap:20px;padding:20px}
+@media (max-width:620px){.md{grid-template-columns:1fr}.md .big{max-width:230px;margin:0 auto}}
+.md .big{border-radius:12px;overflow:hidden;aspect-ratio:245/342;background:var(--surface-2)}
+.md .big img{width:100%;height:100%;object-fit:cover}
+.md h3{margin:0;font-size:22px;letter-spacing:-.02em}
+.vrow{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.vrow .vn{font-weight:600}
+.vrow .vp{font-size:13px;color:var(--ink-2)}
+.step{margin-left:auto;display:flex;align-items:center;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.step button{border:0;background:var(--surface-2);width:36px;height:36px;font-size:18px;cursor:pointer}
+.step span{min-width:36px;text-align:center;font-weight:700;font-variant-numeric:tabular-nums}
+.x{position:absolute;right:10px;top:10px;border:0;background:var(--surface-2);width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:18px}
+
+/* collection */
+.rows{display:flex;flex-direction:column;gap:8px}
+.srow{display:grid;grid-template-columns:90px 1fr 110px;gap:14px;align-items:center;padding:12px 14px;text-decoration:none}
+.srow img{max-height:40px;max-width:90px;object-fit:contain}
+.srow .r{text-align:right;font-weight:700;font-variant-numeric:tabular-nums}
+.srow .bar{margin-top:6px}
+@media (max-width:520px){.srow{grid-template-columns:60px 1fr 80px}.srow img{max-width:60px}}
+
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(30px);opacity:0;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;font-weight:600;transition:.25s;z-index:99;pointer-events:none;max-width:calc(100vw - 32px)}
+.toast.on{opacity:1;transform:translateX(-50%)}
+.toast.act{pointer-events:auto}
+.toast .undo{margin-left:14px;background:none;border:0;color:var(--accent);font-weight:700;cursor:pointer;padding:0}
+.set-form{padding:18px;display:grid;gap:14px;max-width:560px}
+.set-form label{display:grid;gap:6px;font-weight:600;font-size:14px}
+.foot{margin-top:40px;font-size:12px;color:var(--ink-3)}
+</style>
+</head>
+<body>
+<header class="top"><div class="top-in">
+  <a class="brand" href="#/sets"><span class="brand-ball"></span>SetDex</a>
+  <nav>
+    <a href="#/sets" data-nav="sets">Sets</a>
+    <a href="#/collection" data-nav="collection">Collection</a>
+    <a href="#/search" data-nav="search">Search</a>
+    <a href="#/settings" data-nav="settings">Settings</a>
+  </nav>
+  <a class="syncst" id="syncst" href="#/settings" hidden></a>
+</div></header>
+<main id="main"></main>
+<dialog id="dlg"></dialog>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const API = "https://api.tcgdex.net/v2/en";
+const DAY = 864e5;
+/* set code, release date, series id, series name — from the TCGdex cards database */
+const SETINFO = {"base4":["B2","2000-02-24","base","Base"],"base1":["BS","1999-01-09","base","Base"],"base3":["FO","1999-10-10","base","Base"],"base2":["JU","1999-06-16","base","Base"],"base5":["RO","2000-04-24","base","Base"],"wp":["","1999-09-01","base","Base"],"basep":["","1999-07-01","base","Base"],"bwp":["BWP","2011-04-26","bw","Black & White"],"bw1":["BLW","2011-04-25","bw","Black & White"],"bw7":["BCR","2012-11-07","bw","Black & White"],"bw5":["DEX","2012-05-09","bw","Black & White"],"dv1":["DRV","2012-10-05","bw","Black & White"],"bw6":["DRX","2012-08-15","bw","Black & White"],"bw2":["EP","2011-08-31","bw","Black & White"],"bw11":["LTR","2013-11-06","bw","Black & White"],"bw4":["NXD","2012-02-08","bw","Black & White"],"bw3":["NVI","2011-11-16","bw","Black & White"],"bw10":["PLB","2013-08-14","bw","Black & White"],"bw9":["PLF","2013-05-08","bw","Black & White"],"bw8":["PLS","2013-02-06","bw","Black & White"],"rc":["","2013-11-06","bw","Black & White"],"col1":["COL","2011-02-09","col","Call of Legends"],"dpp":["","2007-05-01","dp","Diamond & Pearl"],"dp1":["DP","2007-05-01","dp","Diamond & Pearl"],"dp4":["GE","2008-02-01","dp","Diamond & Pearl"],"dp6":["LA","2008-08-01","dp","Diamond & Pearl"],"dp5":["MD","2008-05-01","dp","Diamond & Pearl"],"dp2":["MT","2007-08-01","dp","Diamond & Pearl"],"dp3":["SW","2007-11-01","dp","Diamond & Pearl"],"dp7":["SF","2008-11-01","dp","Diamond & Pearl"],"ecard2":["AQ","2003-01-15","ecard","E-Card"],"bog":["","2002-12-01","ecard","E-Card"],"ecard1":["EX","2002-09-15","ecard","E-Card"],"sp":["","2002-08-01","ecard","E-Card"],"ecard3":["SK","2003-05-12","ecard","E-Card"],"ex14":["CG","2006-08-30","ex","EX"],"ex11":["DS","2005-10-31","ex","EX"],"ex8":["DX","2005-02-01","ex","EX"],"ex15":["DF","2006-11-08","ex","EX"],"ex3":["DR","2003-11-24","ex","EX"],"ex9":["EM","2005-05-09","ex","EX"],"ex6":["RG","2004-09-01","ex","EX"],"ex5":["HL","2004-06-01","ex","EX"],"ex13":["HP","2006-05-03","ex","EX"],"ex12":["LM","2006-02-13","ex","EX"],"ex5.5":["","2004-07-01","ex","EX"],"ex16":["PK","2007-02-17","ex","EX"],"ex1":["RS","2003-07-01","ex","EX"],"ex2":["SS","2003-09-18","ex","EX"],"ex4":["MA","2004-03-01","ex","EX"],"ex7":["TR","2004-11-01","ex","EX"],"exu":["","2005-08-22","ex","EX"],"ex10":["UF","2005-08-22","ex","EX"],"gym2":["G2","2000-10-16","gym","Gym"],"gym1":["G1","2000-08-14","gym","Gym"],"hgssp":["","2010-02-11","hgss","HeartGold & SoulSilver"],"hgss1":["HS","2010-02-10","hgss","HeartGold & SoulSilver"],"hgss4":["TRI","2010-11-03","hgss","HeartGold & SoulSilver"],"hgss3":["UND","2010-08-18","hgss","HeartGold & SoulSilver"],"hgss2":["UL","2010-05-12","hgss","HeartGold & SoulSilver"],"lc":["LC","2002-05-24","lc","Legendary Collection"],"2013bw":["","2013-11-01","mc","McDonald's Collection"],"2018sm-fr":["","2018-06-13","mc","McDonald's Collection"],"2019sm-fr":["","2019-10-30","mc","McDonald's Collection"],"2011bw":["MCD11","2011-06-17","mc","McDonald's Collection"],"2012bw":["MCD12","2012-06-15","mc","McDonald's Collection"],"2014xy":["MCD14","2014-05-23","mc","McDonald's Collection"],"2015xy":["MCD15","2015-11-27","mc","McDonald's Collection"],"2016xy":["MCD16","2016-08-20","mc","McDonald's Collection"],"2017sm":["MCD17","2017-08-03","mc","McDonald's Collection"],"2018sm":["MCD18","2018-10-19","mc","McDonald's Collection"],"2019sm":["MCD19","2019-10-15","mc","McDonald's Collection"],"2021swsh":["MCD21","2021-02-09","mc","McDonald's Collection"],"2022swsh":["MCD22","2022-08-03","mc","McDonald's Collection"],"2023sv":["MCD23","2023-08-01","mc","McDonald's Collection"],"2024sv":["MCD24","2024-12-04","mc","McDonald's Collection"],"30th":["30C","2026-09-16","me","Mega Evolution"],"30th-c":["30C","2026-09-16","me","Mega Evolution"],"me02.5":["ASC","2026-01-30","me","Mega Evolution"],"me04":["CRI","2026-05-22","me","Mega Evolution"],"mep":["MEP","2025-09-26","me","Mega Evolution"],"mee":["MEE","2025-09-25","me","Mega Evolution"],"me01":["MEG","2025-09-26","me","Mega Evolution"],"me03":["POR","2026-03-27","me","Mega Evolution"],"me02":["PFL","2025-11-14","me","Mega Evolution"],"me05":["PBL","2026-07-17","me","Mega Evolution"],"jumbo":["","2000-02-01","misc","Miscellaneous"],"miscp":["","1996-01-01","misc","Miscellaneous"],"neo4":["N4","2002-02-28","neo","Neo"],"neo2":["N2","2001-06-01","neo","Neo"],"neo1":["N1","2000-12-16","neo","Neo"],"neo3":["N3","2001-09-21","neo","Neo"],"si1":["SI","2001-07-31","neo","Neo"],"np":["","2003-10-01","pop","POP"],"pop1":["P1","2004-09-01","pop","POP"],"pop2":["P2","2005-08-01","pop","POP"],"pop3":["P3","2006-04-01","pop","POP"],"pop4":["P4","2006-08-01","pop","POP"],"pop5":["P5","2007-03-01","pop","POP"],"pop6":["P6","2007-09-01","pop","POP"],"pop7":["P7","2008-03-01","pop","POP"],"pop8":["P8","2008-09-01","pop","POP"],"pop9":["P9","2009-03-01","pop","POP"],"pl4":["AR","2009-11-04","pl","Platinum"],"pl1":["PL","2009-02-11","pl","Platinum"],"ru1":["RM","2009-12-02","pl","Platinum"],"pl2":["RR","2009-05-16","pl","Platinum"],"pl3":["SV","2009-08-19","pl","Platinum"],"A3":["","2025-04-30","tcgp","Pokémon TCG Pocket"],"B1a":["","2025-12-17","tcgp","Pokémon TCG Pocket"],"A3b":["","2025-06-26","tcgp","Pokémon TCG Pocket"],"A3a":["","2025-05-29","tcgp","Pokémon TCG Pocket"],"B2":["","2026-01-29","tcgp","Pokémon TCG Pocket"],"A1":["","2024-10-30","tcgp","Pokémon TCG Pocket"],"B1":["","2025-10-30","tcgp","Pokémon TCG Pocket"],"A1a":["","2024-12-17","tcgp","Pokémon TCG Pocket"],"B2a":["","2026-02-26","tcgp","Pokémon TCG Pocket"],"P-A":["","2024-10-30","tcgp","Pokémon TCG Pocket"],"A4a":["","2025-08-28","tcgp","Pokémon TCG Pocket"],"A2b":["","2025-03-27","tcgp","Pokémon TCG Pocket"],"A2":["","2025-01-30","tcgp","Pokémon TCG Pocket"],"A2a":["","2025-02-28","tcgp","Pokémon TCG Pocket"],"A4":["","2025-07-30","tcgp","Pokémon TCG Pocket"],"sv03.5":["MEW","2023-09-22","sv","Scarlet & Violet"],"sv10.5b":["BLK","2025-07-17","sv","Scarlet & Violet"],"sv10":["DRI","2025-05-30","sv","Scarlet & Violet"],"sv09":["JTG","2025-03-28","sv","Scarlet & Violet"],"mfb":["MFB","2023-09-29","sv","Scarlet & Violet"],"sv03":["OBF","2023-08-11","sv","Scarlet & Violet"],"sv02":["PAL","2023-06-09","sv","Scarlet & Violet"],"sv04.5":["PAF","2024-01-26","sv","Scarlet & Violet"],"sv04":["PAR","2023-11-03","sv","Scarlet & Violet"],"sv08.5":["PRE","2025-01-17","sv","Scarlet & Violet"],"svp":["SVP","2023-03-31","sv","Scarlet & Violet"],"sve":["SVE","2023-03-31","sv","Scarlet & Violet"],"sv01":["SVI","2023-03-31","sv","Scarlet & Violet"],"sv06.5":["SFA","2024-08-02","sv","Scarlet & Violet"],"sv07":["SCR","2024-09-13","sv","Scarlet & Violet"],"sv08":["SSP","2024-11-08","sv","Scarlet & Violet"],"sv05":["TEF","2024-03-22","sv","Scarlet & Violet"],"sv06":["TWM","2024-05-24","sv","Scarlet & Violet"],"sv10.5w":["WHT","2025-07-17","sv","Scarlet & Violet"],"sm3":["BUS","2017-08-04","sm","Sun & Moon"],"sm7":["CES","2018-08-03","sm","Sun & Moon"],"sm12":["CEC","2019-11-01","sm","Sun & Moon"],"sm4":["CIN","2017-11-03","sm","Sun & Moon"],"det1":["DET","2019-03-29","sm","Sun & Moon"],"sm7.5":["DRM","2018-09-07","sm","Sun & Moon"],"sm6":["FLI","2018-05-04","sm","Sun & Moon"],"sm2":["GRI","2017-05-05","sm","Sun & Moon"],"sma":["","2019-08-23","sm","Sun & Moon"],"sm115":["HIF","2019-08-23","sm","Sun & Moon"],"sm8":["LOT","2018-11-02","sm","Sun & Moon"],"smp":["SMP","2017-02-03","sm","Sun & Moon"],"sm3.5":["SLG","2017-10-06","sm","Sun & Moon"],"sm1":["SUM","2017-02-03","sm","Sun & Moon"],"sm9":["TEU","2019-01-31","sm","Sun & Moon"],"sm5":["UPR","2018-02-02","sm","Sun & Moon"],"sm10":["UNB","2019-05-03","sm","Sun & Moon"],"sm11":["UNM","2019-08-02","sm","Sun & Moon"],"swsh10tg":["ASR:TG","2022-05-27","swsh","Sword & Shield"],"swsh10":["ASR","2022-05-27","swsh","Sword & Shield"],"swsh5":["BST","2021-03-19","swsh","Sword & Shield"],"swsh9tg":["BRS:TG","2022-02-25","swsh","Sword & Shield"],"swsh9":["BRS","2022-02-25","swsh","Sword & Shield"],"cel25cc":["CEL:CC","2021-10-08","swsh","Sword & Shield"],"cel25":["CEL","2021-10-08","swsh","Sword & Shield"],"swsh3.5":["CPA","2020-09-25","swsh","Sword & Shield"],"swsh6":["CRE","2021-06-18","swsh","Sword & Shield"],"swsh12.5gg":["CRZ:GG","2023-01-20","swsh","Sword & Shield"],"swsh12.5":["CRZ","2023-01-20","swsh","Sword & Shield"],"swsh3":["DAA","2020-08-14","swsh","Sword & Shield"],"swsh7":["EVS","2021-08-27","swsh","Sword & Shield"],"swsh8":["FST","2021-11-12","swsh","Sword & Shield"],"swsh11tg":["LOR:TG","2022-09-09","swsh","Sword & Shield"],"swsh11":["LOR","2022-09-09","swsh","Sword & Shield"],"fut2020":["FUT20","2020-09-11","swsh","Sword & Shield"],"swsh10.5":["PGO","2022-07-01","swsh","Sword & Shield"],"swsh2":["RCL","2020-05-01","swsh","Sword & Shield"],"swshp":["","2019-11-15","swsh","Sword & Shield"],"swsh4.5sv":["SHF:SV","2021-02-19","swsh","Sword & Shield"],"swsh4.5":["SHF","2021-02-19","swsh","Sword & Shield"],"swsh12tg":["SIT:TG","2022-11-11","swsh","Sword & Shield"],"swsh12":["SIT","2022-11-11","swsh","Sword & Shield"],"swsh1":["SSH","2020-02-07","swsh","Sword & Shield"],"swsh4":["VIV","2020-11-13","swsh","Sword & Shield"],"tk-bw-e":["TK5E","2011-09-01","tk","Trainer kits"],"tk-bw-z":["TK5Z","2011-09-01","tk","Trainer kits"],"tk-dp-l":["TK3L","2007-09-01","tk","Trainer kits"],"tk-dp-m":["TK3M","2007-09-01","tk","Trainer kits"],"tk-ex-latia":["TK1A","2004-07-01","tk","Trainer kits"],"tk-ex-latio":["TK1O","2004-07-01","tk","Trainer kits"],"tk-ex-m":["TK2M","2006-03-01","tk","Trainer kits"],"tk-ex-p":["TK2P","2006-03-01","tk","Trainer kits"],"tk-hs-g":["TK4G","2010-05-01","tk","Trainer kits"],"tk-hs-r":["TK4R","2010-05-01","tk","Trainer kits"],"tk-sm-r":["TK10A","2017-04-21","tk","Trainer kits"],"tk-sm-l":["TK10L","2017-04-21","tk","Trainer kits"],"tk-xy-b":["TK7A","2014-11-01","tk","Trainer kits"],"tk-xy-latia":["TK8A","2015-04-29","tk","Trainer kits"],"tk-xy-latio":["TK8O","2015-04-29","tk","Trainer kits"],"tk-xy-n":["TK6N","2014-03-12","tk","Trainer kits"],"tk-xy-p":["TK9P","2016-04-27","tk","Trainer kits"],"tk-xy-su":["TK9S","2016-04-27","tk","Trainer kits"],"tk-xy-sy":["TK6S","2014-03-12","tk","Trainer kits"],"tk-xy-w":["TK7B","2014-11-01","tk","Trainer kits"],"xy7":["AOR","2015-08-12","xy","XY"],"xy9":["BKP","2016-02-03","xy","XY"],"xy8":["BKT","2015-11-04","xy","XY"],"dc1":["DCR","2015-03-25","xy","XY"],"xy12":["EVO","2016-11-02","xy","XY"],"xy10":["FCO","2016-05-02","xy","XY"],"xy2":["FLF","2014-05-07","xy","XY"],"xy3":["FFI","2014-08-13","xy","XY"],"g1":["GEN","2016-02-22","xy","XY"],"xy0":["KSS","2013-11-08","xy","XY"],"xy4":["PHF","2014-11-05","xy","XY"],"xy5":["PRC","2015-02-04","xy","XY"],"xy6":["ROS","2015-05-06","xy","XY"],"xy11":["STS","2016-08-03","xy","XY"],"xyp":["XYP","2013-10-12","xy","XY"],"xy1":["XY","2014-02-05","xy","XY"],"xya":["","2014-02-05","xy","XY"]};
+const LANGS = ["en","fr","de","es","it","pt"];
+/* matching set ids in the Pokémon TCG API (pokemontcg.io), used for card pictures TCGdex doesn't have */
+const PTCG = {"base4":"base4","base1":"base1","base3":"base3","base2":"base2","base5":"base5","basep":"basep","bwp":"bwp","bw1":"bw1","bw7":"bw7","bw5":"bw5","dv1":"dv1","bw6":"bw6","bw2":"bw2","bw11":"bw11","bw4":"bw4","bw3":"bw3","bw10":"bw10","bw9":"bw9","bw8":"bw8","col1":"col1","dpp":"dpp","dp1":"dp1","dp4":"dp4","dp6":"dp6","dp5":"dp5","dp2":"dp2","dp3":"dp3","dp7":"dp7","ecard2":"ecard2","bog":"bp","ecard1":"ecard1","ecard3":"ecard3","ex14":"ex14","ex11":"ex11","ex8":"ex8","ex15":"ex15","ex3":"ex3","ex9":"ex9","ex6":"ex6","ex5":"ex5","ex13":"ex13","ex12":"ex12","ex16":"ex16","ex1":"ex1","ex2":"ex2","ex4":"ex4","ex7":"ex7","ex10":"ex10","gym2":"gym2","gym1":"gym1","hgssp":"hsp","hgss1":"hgss1","hgss2":"hgss2","lc":"base6","2011bw":"mcd11","2012bw":"mcd12","2014xy":"mcd14","2015xy":"mcd15","2016xy":"mcd16","2017sm":"mcd17","2018sm":"mcd18","2019sm":"mcd19","2021swsh":"mcd21","2022swsh":"mcd22","30th":"me55","30th-c":"me55c","me02.5":"me2pt5","me04":"me4","me01":"me1","me03":"me3","me02":"me2","me05":"me5","neo4":"neo4","neo2":"neo2","neo1":"neo1","neo3":"neo3","si1":"si1","np":"np","pop1":"pop1","pop2":"pop2","pop3":"pop3","pop4":"pop4","pop5":"pop5","pop6":"pop6","pop7":"pop7","pop8":"pop8","pop9":"pop9","pl4":"pl4","pl1":"pl1","ru1":"ru1","pl2":"pl2","pl3":"pl3","sv03.5":"sv3pt5","sv10.5b":"zsv10pt5","sv10":"sv10","sv09":"sv9","sv03":"sv3","sv02":"sv2","sv04.5":"sv4pt5","sv04":"sv4","sv08.5":"sv8pt5","sve":"sve","sv01":"sv1","sv06.5":"sv6pt5","sv07":"sv7","sv08":"sv8","sv05":"sv5","sv06":"sv6","sv10.5w":"rsv10pt5","sm3":"sm3","sm7":"sm7","sm12":"sm12","sm4":"sm4","det1":"det1","sm7.5":"sm75","sm6":"sm6","sm2":"sm2","sma":"sma","sm115":"sm115","sm8":"sm8","smp":"smp","sm3.5":"sm35","sm1":"sm1","sm9":"sm9","sm5":"sm5","sm10":"sm10","sm11":"sm11","swsh10tg":"swsh10tg","swsh10":"swsh10","swsh5":"swsh5","swsh9tg":"swsh9tg","swsh9":"swsh9","cel25cc":"cel25c","cel25":"cel25","swsh3.5":"swsh35","swsh6":"swsh6","swsh12.5gg":"swsh12pt5gg","swsh12.5":"swsh12pt5","swsh3":"swsh3","swsh7":"swsh7","swsh8":"swsh8","swsh11tg":"swsh11tg","swsh11":"swsh11","fut2020":"fut20","swsh10.5":"pgo","swsh2":"swsh2","swshp":"swshp","swsh4.5sv":"swsh45sv","swsh4.5":"swsh45","swsh12tg":"swsh12tg","swsh12":"swsh12","swsh1":"swsh1","swsh4":"swsh4","tk-ex-latia":"tk1a","tk-ex-latio":"tk1b","tk-ex-m":"tk2b","tk-ex-p":"tk2a","xy7":"xy7","xy9":"xy9","xy8":"xy8","dc1":"dc1","xy12":"xy12","xy10":"xy10","xy2":"xy2","xy3":"xy3","g1":"g1","xy0":"xy0","xy4":"xy4","xy5":"xy5","xy6":"xy6","xy11":"xy11","xyp":"xyp","xy1":"xy1","hgss3":"hgss3","hgss4":"hgss4","svp":"svp"};
+/* subsets that are printed as part of a main set (TCG Collector shows them inside it) */
+const SUBSETS = {exu:"ex10", sma:"sm115", "swsh4.5sv":"swsh4.5", swsh9tg:"swsh9", swsh10tg:"swsh10", swsh11tg:"swsh11", swsh12tg:"swsh12", "swsh12.5gg":"swsh12.5", cel25cc:"cel25", "30th-c":"30th"};
+const CHILDREN = {};
+Object.entries(SUBSETS).forEach(([c, p]) => (CHILDREN[p] = CHILDREN[p] || []).push(c));
+const parentOf = id => SUBSETS[id] || id;
+/* subsets the database keeps inside the main set */
+const PREFIX_SUBS = {bw11:[{key:"rc", pre:"RC", name:"Radiant Collection", total:25}], g1:[{key:"rc", pre:"RC", name:"Radiant Collection", total:32}],
+  "30th":[{key:"pikachu", from:23, to:52, name:"Pikachu Collection", total:30}]};
+const REDIRECT = {rc:["bw11", "rc"]};
+/* a subset is either a number prefix (RC1, RC2 …) or a number range inside the main set (30th Celebration Pikachu 023–052) */
+const prefixPart = (setId, localId) => (PREFIX_SUBS[setId] || []).find(p => p.pre
+  ? localId.startsWith(p.pre) && /^\d+$/.test(localId.slice(p.pre.length))
+  : /^\d+$/.test(localId) && +localId >= p.from && +localId <= p.to);
+/* which tab a collection entry belongs to (null = main set) */
+function entryPart(e){
+  if(e.r && SUBSETS[e.r]) return e.r;
+  const v = prefixPart(e.s, e.l || ""); return v ? v.key : null;
+}
+/* subsets shown for a main set: [{key, name, total}] */
+function subsOf(id){
+  return [...(CHILDREN[id] || []).filter(c => setMeta(c)).map(c => ({key:c, name:setMeta(c).name, total:setMeta(c).total})), ...(PREFIX_SUBS[id] || [])];
+}
+const main = document.getElementById("main");
+const dlg = document.getElementById("dlg");
+const VLABEL = {normal:"Normal", holo:"Holo", reverse:"Reverse holo", firstEdition:"1st Edition"};
+
+/* ---------- storage ---------- */
+function lsGet(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch(e){ return d; } }
+function lsSet(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); return true; }catch(e){ return false; } }
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+let col = lsGet("setdex-collection", null) || {cards:{}};
+col.cards = col.cards || {};
+col.del = col.del || {};   // deleted card ids → time, so deletions sync to other devices
+Object.values(col.cards).forEach(e => { if(SUBSETS[e.s]){ e.r = e.s; e.s = SUBSETS[e.s]; } });
+col.settings = Object.assign({currency:"EUR", nok:11.7, usd:0.9, auto:true, manual:{}}, col.settings || {});
+col.settings.manual = Object.assign({NOK:col.settings.nok}, col.settings.manual || {});
+function saveCol(){
+  if(!lsSet("setdex-collection", col)) toast("Could not save. Your browser storage is full or blocked.");
+  if(typeof syncSoon === "function") syncSoon();
+}
+const touch = id => { const e = col.cards[id]; if(e){ e.u = Date.now(); delete col.del[id]; } else col.del[id] = Date.now(); };
+const touchSettings = () => { col.su = Date.now(); };
+
+/* collection entry: col.cards[cardId] = {s:setId, n:name, l:localId, i:imageBase, q:{variant:count}} */
+const entry = id => col.cards[id];
+const qty = (id, v) => col.cards[id]?.q?.[v] || 0;
+const ownedCount = id => { const e = col.cards[id]; return e ? Object.values(e.q).reduce((a,b)=>a+b,0) : 0; };
+function setQty(card, setId, v, n){
+  n = Math.max(0, Math.min(999, n|0));
+  let e = col.cards[card.id];
+  if(!e) e = col.cards[card.id] = {s:setId, n:card.name, l:card.localId, i:card.image || "", q:{}};
+  if(card.rs) e.r = card.rs;
+  if(n) e.q[v] = n; else delete e.q[v];
+  if(!Object.keys(e.q).length) delete col.cards[card.id];
+  touch(card.id);
+  saveCol();
+}
+
+/* ---------- API + caches ---------- */
+async function getJSON(path){
+  const r = await fetch(API + path);
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+async function cached(key, path, map){
+  const c = lsGet(key, null);
+  if(c && Date.now() - c.t < DAY) return c.d;
+  try{
+    const d = map(await getJSON(path));
+    if(!lsSet(key, {t:Date.now(), d})){ trimCaches(); lsSet(key, {t:Date.now(), d}); }
+    return d;
+  }catch(e){ if(c) return c.d; throw e; }
+}
+let setsList = null;
+async function getSets(){
+  if(setsList) return setsList;
+  setsList = await cached("setdex-sets", "/sets", d => d.map(s => ({id:s.id, name:s.name, logo:s.logo||"", symbol:s.symbol||"", total:s.cardCount?.total||0, official:s.cardCount?.official||0})));
+  return setsList;
+}
+const setMeta = id => (setsList || []).find(s => s.id === id);
+const setMem = {};
+async function getSet(id){
+  if(setMem[id]) return setMem[id];
+  const base = await getSetRaw(id);
+  const parts = await Promise.all((CHILDREN[id] || []).map(c => getSetRaw(c).catch(() => null)));
+  const d = Object.assign({}, base, {cards:base.cards.slice(), subs:[]});
+  parts.forEach(p => {
+    if(!p) return;
+    d.subs.push({id:p.id, name:p.name});
+    p.cards.forEach(c => d.cards.push(Object.assign({}, c, {sub:p.name, rs:p.id, part:p.id})));
+  });
+  (PREFIX_SUBS[id] || []).forEach(v => {
+    let n = 0;
+    d.cards.forEach(c => { if(!c.part && prefixPart(id, c.localId) === v){ c.sub = v.name; c.part = v.key; n++; } });
+    if(n) d.subs.push({id:v.key, name:v.name});
+  });
+  // subset cards after the main set
+  d.cards = [...d.cards.filter(c => !c.part), ...d.subs.flatMap(x => d.cards.filter(c => c.part === x.id))];
+  d.total = d.cards.length;
+  return setMem[id] = d;
+}
+async function getSetRaw(id){
+  const d = await cached("setdex-set-" + id, "/sets/" + encodeURIComponent(id), s => ({
+    id:s.id, name:s.name, logo:s.logo||"", symbol:s.symbol||"", serie:s.serie?.name||"", releaseDate:s.releaseDate||"",
+    total:s.cardCount?.total||(s.cards||[]).length, official:s.cardCount?.official||0,
+    cards:(s.cards||[]).map(c => ({id:c.id, localId:String(c.localId), name:c.name, image:c.image||""}))
+  }));
+  return d;
+}
+/* card total for a main set including its subsets */
+const setTotal = id => (setMeta(id)?.total || 0) + (CHILDREN[id] || []).reduce((a, c) => a + (setMeta(c)?.total || 0), 0);
+
+/* per-set price/variant cache: {cardId: {v:[variants], p:{variant: EUR}, r:rarity, t}} */
+const priceMem = {};
+function prices(setId){ return priceMem[setId] || (priceMem[setId] = lsGet("setdex-p-" + setId, {})); }
+function savePrices(setId){
+  if(!lsSet("setdex-p-" + setId, prices(setId))){ trimCaches(setId); lsSet("setdex-p-" + setId, prices(setId)); }
+}
+function trimCaches(keep){
+  // free space by dropping cached set data for sets you own nothing in
+  const ownedSets = new Set(Object.values(col.cards).map(e => e.s));
+  try{
+    Object.keys(localStorage).forEach(k => {
+      const m = k.match(/^setdex-(p|set)-(.+)$/);
+      if(m && m[2] !== keep && !ownedSets.has(m[2])) localStorage.removeItem(k);
+    });
+  }catch(e){}
+}
+const num = x => (typeof x === "number" && isFinite(x) && x > 0) ? x : null;
+function slim(c){
+  const vr = c.variants || {};
+  const v = [];
+  if(vr.normal) v.push("normal");
+  if(vr.holo) v.push("holo");
+  if(vr.reverse) v.push("reverse");
+  if(vr.firstEdition) v.push("firstEdition");
+  if(!v.length) v.push("normal");
+  const cm = c.pricing?.cardmarket || {};
+  const tp = c.pricing?.tcgplayer || {};
+  const usd = usdToEur();
+  const tpv = k => {
+    const keys = {normal:["normal"], holo:["holo","holofoil"], reverse:["reverse","reverse-holofoil","reverseHolofoil"], firstEdition:["1st-edition","firstEdition","1stEditionHolofoil","1st-edition-holofoil"]}[k];
+    for(const kk of keys){ const m = num(tp[kk]?.marketPrice) ?? num(tp[kk]?.midPrice); if(m) return +(m * usd).toFixed(2); }
+    return null;
+  };
+  const base = num(cm.trend) ?? num(cm.avg) ?? num(cm.avg30);
+  const foil = num(cm["trend-holo"]) ?? num(cm["avg-holo"]) ?? num(cm["avg30-holo"]);
+  const p = {};
+  for(const k of v){
+    let eur;
+    if(k === "reverse") eur = foil;
+    else if(k === "holo" && v.includes("normal")) eur = foil ?? base;
+    else eur = base;
+    p[k] = eur ?? tpv(k);
+  }
+  return {v, p, r:c.rarity || "", t:Date.now()};
+}
+const info = (setId, id) => prices(setId)[id];
+const variantsOf = (setId, id) => info(setId, id)?.v || ["normal"];
+const priceOf = (setId, id, v) => { const p = info(setId, id)?.p; return p ? (p[v] ?? null) : null; };
+
+/* move counts saved under a variant the card doesn't have (added before details loaded) */
+function reconcile(setId, id){
+  const e = col.cards[id], i = info(setId, id);
+  if(!e || !i) return false;
+  let changed = false;
+  for(const k of Object.keys(e.q)){
+    if(!i.v.includes(k)){ e.q[i.v[0]] = (e.q[i.v[0]] || 0) + e.q[k]; delete e.q[k]; changed = true; }
+  }
+  if(changed){ touch(id); saveCol(); }
+  return changed;
+}
+
+let loadToken = 0;
+/* fetch full card details (variants + prices) for the given cards, 6 at a time */
+async function loadDetails(setId, cards, onTick, force){
+  const token = loadToken;
+  const ps = prices(setId);
+  const todo = cards.filter(c => force || !ps[c.id] || Date.now() - ps[c.id].t > DAY);
+  if(!todo.length){ onTick && onTick(0, 0); return; }
+  let i = 0, done = 0, since = 0, failed = 0;
+  async function worker(){
+    while(i < todo.length && token === loadToken){
+      const c = todo[i++];
+      try{ ps[c.id] = slim(await getJSON("/cards/" + encodeURIComponent(c.id))); reconcile(setId, c.id); }
+      catch(e){ failed++; }
+      done++;
+      if(++since >= 25){ since = 0; savePrices(setId); }
+      if(token === loadToken && onTick) onTick(done, todo.length, failed);
+    }
+  }
+  await Promise.all(Array.from({length:6}, worker));
+  savePrices(setId);
+}
+
+/* ---------- formatting ---------- */
+/* ---------- exchange rates (ECB daily rates via frankfurter.dev, free, no key) ---------- */
+const CURRENCIES = {EUR:["Euro (€)", "en-IE"], NOK:["Norwegian kroner (kr)", "nb-NO"], SEK:["Swedish kronor (kr)", "sv-SE"], DKK:["Danish kroner (kr)", "da-DK"], USD:["US dollars ($)", "en-US"], GBP:["British pounds (£)", "en-GB"]};
+let fx = lsGet("setdex-rates", null); // {t, date, rates:{NOK:…, USD:…}} per 1 EUR
+async function refreshRates(force){
+  if(!force && fx && Date.now() - fx.t < DAY / 2) return false;
+  for(const u of ["https://api.frankfurter.dev/v1/latest?base=EUR", "https://api.frankfurter.app/latest?from=EUR"]){
+    try{
+      const r = await fetch(u); if(!r.ok) continue;
+      const d = await r.json();
+      if(d && d.rates && d.rates.USD){ fx = {t:Date.now(), date:d.date, rates:d.rates}; lsSet("setdex-rates", fx); return true; }
+    }catch(e){}
+  }
+  return false;
+}
+/* how many of the chosen currency one euro buys */
+function eurRate(cur){
+  if(cur === "EUR") return 1;
+  const s = col.settings;
+  if(s.auto && fx?.rates?.[cur]) return fx.rates[cur];
+  return s.manual[cur] || fx?.rates?.[cur] || null;
+}
+function usdToEur(){
+  const s = col.settings;
+  if(s.auto && fx?.rates?.USD) return 1 / fx.rates.USD;
+  return s.usd || 0.9;
+}
+function money(eur){
+  if(eur == null) return "–";
+  let cur = col.settings.currency;
+  let rate = eurRate(cur);
+  if(!rate){ cur = "EUR"; rate = 1; }
+  const v = eur * rate;
+  const big = cur !== "EUR" && cur !== "USD" && cur !== "GBP" && v >= 100;
+  return new Intl.NumberFormat((CURRENCIES[cur] || CURRENCIES.EUR)[1], {style:"currency", currency:cur, maximumFractionDigits: big ? 0 : 2}).format(v);
+}
+const pct = (a, b) => b ? Math.floor(a / b * 1000) / 10 : 0;
+const img = (base, q) => base ? `${base}/${q || "low"}.webp` : "";
+const logo = u => u ? u + ".webp" : "";
+const sinfo = id => { const x = SETINFO[id]; return {code:x?.[0] || "", date:x?.[1] || "", serieId:x?.[2] || "", serie:x?.[3] || "New sets"}; };
+/* TCG Pocket (the phone game) sets: hide them, including future ones (ids like A1, A4a, B2, P-A) */
+const isPocket = id => sinfo(id).serieId === "tcgp" || (!SETINFO[id] && /^([A-Z]\d+[a-z]?|P-[A-Z])$/.test(id));
+/* <img> that tries each URL in turn, then shows a text placeholder */
+function imgTag(urls, alt, ph, lazy){
+  urls = urls.filter(Boolean);
+  if(!urls.length) return ph;
+  return `<img ${lazy ? 'loading="lazy"' : ""} src="${esc(urls[0])}" alt="${esc(alt)}" data-fb="${esc(JSON.stringify(urls.slice(1)))}" data-ph="${esc(ph)}" onerror="imgFail(this)">`;
+}
+/* sets with no logo anywhere: use the first card picture of the set as its cover */
+let coverQueue = Promise.resolve();
+function fillCover(el){
+  const id = el.dataset.cover; if(!id || el.dataset.done) return; el.dataset.done = 1;
+  coverQueue = coverQueue.then(async () => {
+    try{
+      const set = await getSet(id);
+      const urls = set.cards.filter(c => c.image).slice(0, 3).map(c => img(c.image));
+      if(!urls.length || !document.body.contains(el)) return;
+      const im = new Image(); im.className = "cover"; im.alt = "";
+      let k = 0;
+      im.onload = () => el.replaceWith(im);
+      im.onerror = () => { if(++k < urls.length) im.src = urls[k]; };
+      im.src = urls[0];
+    }catch(e){}
+  });
+}
+function imgFail(el){
+  let rest = [];
+  try{ rest = JSON.parse(el.dataset.fb || "[]"); }catch(e){}
+  if(rest.length){ el.dataset.fb = JSON.stringify(rest.slice(1)); el.src = rest[0]; return; }
+  const t = document.createElement("template"); t.innerHTML = el.dataset.ph || "";
+  const cov = t.content.querySelector("[data-cover]");
+  el.replaceWith(t.content);
+  if(cov) fillCover(cov);
+}
+/* TCGdex is missing English pictures for some sets; try the other languages' pictures */
+function cardUrls(c, setId, q){
+  const real = c.rs || setId, sid = sinfo(real).serieId;
+  const alt = sid ? LANGS.map(l => `https://assets.tcgdex.net/${l}/${sid}/${real}/${encodeURIComponent(c.localId)}/${q || "low"}.webp`) : [];
+  const pid = PTCG[real], num = /^\d+$/.test(c.localId) ? String(+c.localId) : c.localId;
+  const big = q === "high";
+  const ptcg = pid ? [`https://images.scrydex.com/pokemon/${pid}-${encodeURIComponent(num)}/${big ? "large" : "small"}`, `https://images.pokemontcg.io/${pid}/${encodeURIComponent(num)}${big ? "_hires" : ""}.png`] : [];
+  // TCGdex English first, then the Pokémon TCG API, then TCGdex in other languages
+  return c.image ? [img(c.image, q), ...ptcg, ...alt.slice(1)] : [...ptcg, ...alt.slice(1)];
+}
+function logoUrls(s){
+  const sid = sinfo(s.id).serieId;
+  const alt = sid ? LANGS.map(l => `https://assets.tcgdex.net/${l}/${sid}/${s.id}/logo.webp`) : [];
+  const cover = sid ? ["en","fr"].map(l => `https://assets.tcgdex.net/${l}/${sid}/${s.id}/1/low.webp`) : [];
+  return s.logo ? [logo(s.logo), ...alt.slice(1), ...cover] : [...alt, ...cover];
+}
+const symUrl = s => s.symbol ? s.symbol + ".webp" : "";
+function markHTML(s, withYear){
+  const i = sinfo(s.id), sym = symUrl(s);
+  const date = i.date || s.releaseDate || "";
+  return `<div class="mark">${sym ? imgTag([sym], "", "", true).replace("<img", '<img class="sym"') : ""}${i.code ? `<span class="code">${esc(i.code)}</span>` : ""}${withYear && date ? `<span class="yr">${esc(date.slice(0, 4))}</span>` : ""}</div>`;
+}
+const isOfficial = (localId, off) => /^\d+$/.test(localId) && +localId <= off;
+let toastT;
+function toast(msg, undo){
+  const t = document.getElementById("toast"); t.textContent = msg;
+  if(undo){ const b = document.createElement("button"); b.className = "undo"; b.textContent = "Undo"; b.onclick = () => { t.classList.remove("on", "act"); undo(); }; t.append(b); }
+  t.classList.toggle("act", !!undo); t.classList.add("on");
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove("on", "act"), undo ? 7000 : 2200);
+}
+/* remove cards from the collection, with undo */
+function removeCards(ids, label){
+  const before = JSON.parse(JSON.stringify(col.cards));
+  let n = 0;
+  const now = Date.now();
+  ids.forEach(id => { if(col.cards[id]){ n += ownedCount(id); delete col.cards[id]; col.del[id] = now; } });
+  if(!n){ toast("Nothing to remove"); return 0; }
+  saveCol();
+  toast(`Removed ${n} card${n > 1 ? "s" : ""} from ${label}`, () => {
+    const t = Date.now();
+    Object.entries(before).forEach(([id, e]) => { if(!col.cards[id]){ col.cards[id] = Object.assign(e, {u:t}); delete col.del[id]; } });
+    saveCol(); route(); toast("Cards restored");
+  });
+  return n;
+}
+const loading = msg => `<div class="center"><div class="spin"></div>${esc(msg || "Loading…")}</div>`;
+const failBox = msg => `<div class="center"><p>${esc(msg)}</p><button class="btn" onclick="route()">Try again</button></div>`;
+
+/* ---------- stats ---------- */
+function setStats(set, cards){
+  cards = cards || set.cards;
+  const ps = prices(set.id);
+  const off = set.official || set.cards.length;
+  let uniq = 0, offTotal = 0, offOwned = 0, master = 0, masterOwned = 0, setVal = 0, masterVal = 0, myVal = 0, priced = 0, known = 0;
+  for(const c of cards){
+    const i = ps[c.id]; const vs = i?.v || ["normal"]; const e = col.cards[c.id];
+    const has = e && Object.keys(e.q).length;
+    if(i) known++;
+    if(!c.part && isOfficial(c.localId, off)){ offTotal++; if(has) offOwned++; }
+    if(has) uniq++;
+    master += vs.length;
+    vs.forEach(v => { const p = i?.p?.[v]; if(p != null) masterVal += p; if(e?.q?.[v]) masterOwned++; });
+    const bp = i?.p?.[vs[0]];
+    if(bp != null){ setVal += bp; priced++; }
+    if(e) for(const [v, n] of Object.entries(e.q)){ const p = i?.p?.[v]; if(p != null) myVal += p * n; }
+  }
+  return {uniq, total:cards.length, offOwned, offTotal, master, masterOwned, setVal, masterVal, myVal, priced, known};
+}
+
+/* ---------- views ---------- */
+let setsFilter = lsGet("setdex-ui-setsfilter", "all");
+async function viewSets(){
+  main.innerHTML = loading("Loading sets…");
+  let sets;
+  try{ sets = await getSets(); }catch(e){ main.innerHTML = failBox("Couldn't reach the card database. Check your internet connection."); return; }
+  const counts = {};
+  const subCounts = {};
+  Object.values(col.cards).forEach(e => { counts[e.s] = (counts[e.s] || 0) + 1; const k = entryPart(e); if(k) subCounts[e.s + "/" + k] = (subCounts[e.s + "/" + k] || 0) + 1; });
+  const order = sets.map((s, n) => ({s, n, d:sinfo(s.id).date || "9999"})).filter(x => !isPocket(x.s.id) && !SUBSETS[x.s.id] && !REDIRECT[x.s.id] && x.s.total > 0);
+  order.sort((a, b) => b.d.localeCompare(a.d) || b.n - a.n);
+  const list = order.map(x => x.s);
+  main.innerHTML = `
+    <h1>All sets</h1>
+    <div class="toolbar">
+      <input class="input" id="q" placeholder="Filter sets, e.g. Prismatic, 151, PAF" autocomplete="off">
+      <div class="chips">
+        <button class="chip ${setsFilter==="all"?"on":""}" data-f="all">All</button>
+        <button class="chip ${setsFilter==="started"?"on":""}" data-f="started">Started</button>
+      </div>
+    </div>
+    <div class="sets" id="sets"></div>`;
+  const q = document.getElementById("q");
+  const draw = () => {
+    const t = q.value.trim().toLowerCase();
+    const rows = list.filter(s => (!t || s.name.toLowerCase().includes(t) || s.id.toLowerCase().includes(t) || sinfo(s.id).code.toLowerCase() === t || subsOf(s.id).some(c => c.name.toLowerCase().includes(t))) && (setsFilter === "all" || counts[s.id]));
+    const groups = [];
+    rows.forEach(s => { const g = sinfo(s.id).serie; let x = groups.find(y => y.g === g); if(!x) groups.push(x = {g, sets:[]}); x.sets.push(s); });
+    document.getElementById("sets").outerHTML = `<div id="sets">${groups.map(x => `<div class="sets-group">${esc(x.g)}</div><div class="sets">${x.sets.map(setCard).join("")}</div>`).join("")}</div>`;
+    document.querySelectorAll("#sets [data-cover]").forEach(fillCover);
+    if(!rows.length) document.getElementById("sets").innerHTML = `<p class="muted">${setsFilter === "started" ? "You haven't added cards to any set yet. Open a set and tap + on the cards you own." : "No sets match."}</p>`;
+  };
+  const setCard = s => {
+      const have = counts[s.id] || 0, tot = setTotal(s.id) || s.total || 0, p = pct(have, tot);
+      return `<a class="setc panel" href="#/set/${encodeURIComponent(s.id)}">
+        <div class="logo">${imgTag(logoUrls(s), s.name, `<div class="ph" data-cover="${esc(s.id)}">${esc(sinfo(s.id).code || s.name)}</div>`, true)}</div>
+        <div class="nm">${esc(s.name)}${subsOf(s.id).map(c => `<div class="incl" role="link" onclick="event.preventDefault();location.hash='#/set/${esc(s.id)}/${esc(c.key)}'">+ ${esc(c.name.replace(s.name, "").trim() || c.name)} <span class="faint">${subCounts[s.id + "/" + c.key] || 0}/${c.total}</span></div>`).join("")}</div>
+        ${markHTML(s, true)}
+        <div class="bar ${have && have>=tot ? "done":""}"><i style="width:${p}%"></i></div>
+        <div class="ct"><span>${have} / ${tot}</span><span>${have ? p + "%" : ""}</span></div>
+      </a>`;
+  };
+  q.addEventListener("input", draw);
+  main.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { setsFilter = b.dataset.f; lsSet("setdex-ui-setsfilter", setsFilter); main.querySelectorAll("[data-f]").forEach(x => x.classList.toggle("on", x === b)); draw(); });
+  draw();
+}
+
+let cardFilter = "all", cardSort = "num";
+let current = null; // {set}
+async function viewSet(id, part){
+  if(REDIRECT[id]){ location.replace("#/set/" + REDIRECT[id].map(encodeURIComponent).join("/")); return; }
+  if(SUBSETS[id]){ location.replace("#/set/" + encodeURIComponent(SUBSETS[id]) + "/" + encodeURIComponent(id)); return; }
+  main.innerHTML = loading("Loading set…");
+  let set;
+  try{ [set] = await Promise.all([getSet(id), getSets().catch(() => null)]); }
+  catch(e){ main.innerHTML = failBox("Couldn't load this set. Check your internet connection."); return; }
+  if(!set.subs?.length) part = "all";
+  else if(part !== "all" && part !== "main" && !set.subs.some(x => x.id === part)) part = "main";
+  current = {set, part};
+  const mainCount = set.cards.filter(c => !c.part).length;
+  const tabs = set.subs?.length ? `<div class="tabs">${[["main", set.name, mainCount], ...set.subs.map(x => [x.id, x.name, set.cards.filter(c => c.part === x.id).length]), ["all", set.subs.length > 1 ? "All" : "Both", set.cards.length]]
+    .map(([k, n, c]) => `<a class="tab ${k === part ? "on" : ""}" href="#/set/${encodeURIComponent(set.id)}/${encodeURIComponent(k)}">${esc(n)} <span>${c}</span></a>`).join("")}</div>` : "";
+  main.innerHTML = `
+    <a class="back" href="#/sets">← All sets</a>
+    <div class="shead">
+      <div class="logo">${imgTag(logoUrls(set), set.name, "", false)}</div>
+      <div><h1>${esc(set.name)}</h1><div class="muted">${esc([set.serie, set.releaseDate].filter(Boolean).join(" · "))}</div>${markHTML({id:set.id, symbol:set.symbol || setMeta(set.id)?.symbol || "", releaseDate:set.releaseDate}, false)}</div>
+    </div>
+    ${tabs}
+    ${missingNote(set)}
+    <div class="stats" id="stats"></div>
+    <div class="toolbar">
+      <div class="chips">
+        <button class="chip" data-cf="all">All</button>
+        <button class="chip" data-cf="have">Have</button>
+        <button class="chip" data-cf="need">Need</button>
+      </div>
+      <div class="chips">
+        <button class="chip" data-cs="num">By number</button>
+        <button class="chip" data-cs="price">By price</button>
+      </div>
+      <span class="loadnote" id="ln"></span>
+      <button class="btn small danger" id="reset">Reset</button>
+    </div>
+    <div class="grid" id="grid"></div>`;
+  document.getElementById("reset").onclick = () => {
+    const mine = partCards().filter(c => ownedCount(c.id));
+    const label = part === "all" || part === "main" || !set.subs?.length ? set.name : (set.subs.find(x => x.id === part)?.name || set.name);
+    if(!mine.length){ toast(`You have no cards in ${label}`); return; }
+    if(!confirm(`Remove all ${mine.length} cards you own in ${label}?\n\nYou can press Undo right after.`)) return;
+    removeCards(mine.map(c => c.id), label);
+    drawGrid(); drawStats();
+  };
+  const grid = document.getElementById("grid");
+  const syncChips = () => {
+    main.querySelectorAll("[data-cf]").forEach(b => b.classList.toggle("on", b.dataset.cf === cardFilter));
+    main.querySelectorAll("[data-cs]").forEach(b => b.classList.toggle("on", b.dataset.cs === cardSort));
+  };
+  main.querySelectorAll("[data-cf]").forEach(b => b.onclick = () => { cardFilter = b.dataset.cf; syncChips(); drawGrid(); });
+  main.querySelectorAll("[data-cs]").forEach(b => b.onclick = () => { cardSort = b.dataset.cs; syncChips(); drawGrid(); });
+  syncChips();
+
+  function drawGrid(){
+    let cards = partCards().slice();
+    if(cardFilter === "have") cards = cards.filter(c => ownedCount(c.id));
+    if(cardFilter === "need") cards = cards.filter(c => !ownedCount(c.id));
+    if(cardSort === "price") cards.sort((a, b) => (priceOf(set.id, b.id, variantsOf(set.id, b.id)[0]) ?? -1) - (priceOf(set.id, a.id, variantsOf(set.id, a.id)[0]) ?? -1));
+    const sectioned = cardSort === "num" && set.subs?.length && part === "all";
+    let last = null;
+    grid.innerHTML = cards.length ? cards.map(c => {
+      let h = "";
+      if(sectioned && (c.sub || "") !== last){ last = c.sub || ""; h = `<div class="sec">${esc(c.sub || set.name)}</div>`; }
+      return h + tileHTML(c, set.id);
+    }).join("") : `<p class="muted">${cardFilter === "have" ? "No cards from this set yet." : "You have every card in this set. Nice!"}</p>`;
+  }
+  drawGrid();
+  drawStats();
+  bindGrid(grid, () => set.id, cid => set.cards.find(c => c.id === cid), () => drawStats());
+
+  // load variants + prices in the background
+  const ln = document.getElementById("ln");
+  let raf = 0;
+  await loadDetails(set.id, set.cards, (d, n, failed) => {
+    if(!document.body.contains(ln)) return;
+    ln.textContent = n && d < n ? `Loading prices ${d}/${n}…` : (failed ? `${failed} cards couldn't load. Reopen the set to retry.` : "");
+    if(!raf) raf = requestAnimationFrame(() => { raf = 0; drawStats(); refreshTiles(grid, set.id); });
+  });
+  if(document.body.contains(grid)){ drawStats(); refreshTiles(grid, set.id); if(cardSort === "price") drawGrid(); }
+}
+
+/* numbers 1..official that the card database doesn't have */
+function missingNote(set){
+  const off = set.official; if(!off) return "";
+  const have = new Set(set.cards.filter(c => !c.rs).map(c => c.localId.replace(/^0+(?=\d)/, "")));
+  if(![...have].some(x => /^\d+$/.test(x))) return "";
+  const miss = []; for(let k = 1; k <= off; k++) if(!have.has(String(k)) && !have.has(k + "a")) miss.push(k);
+  if(!miss.length) return "";
+  const ranges = []; miss.forEach(k => { const r = ranges[ranges.length - 1]; if(r && r[1] === k - 1) r[1] = k; else ranges.push([k, k]); });
+  return `<div class="note">The card database is missing ${miss.length} card${miss.length > 1 ? "s" : ""} from this set: #${ranges.map(r => r[0] === r[1] ? r[0] : r[0] + "–" + r[1]).join(", #")}. They'll appear here when the database adds them.</div>`;
+}
+/* cards shown on the open set page: main set, one subset, or both */
+function partCards(){
+  const {set, part} = current;
+  if(part === "main") return set.cards.filter(c => !c.part);
+  if(part && part !== "all") return set.cards.filter(c => c.part === part);
+  return set.cards;
+}
+function drawStats(){
+  const el = document.getElementById("stats");
+  if(!el || !current) return;
+  const set = current.set, s = setStats(set, partCards());
+  const p = pct(s.uniq, s.total);
+  const partial = s.priced < s.total ? `<div class="sub faint">${s.known < s.total ? "loading…" : `${s.total - s.priced} cards have no price`}</div>` : "";
+  el.innerHTML = `
+    <div class="stat panel hero"><div class="lb">${current.part === "all" || current.part === "main" || !set.subs?.length ? "Set progress" : esc(set.subs.find(x => x.id === current.part)?.name || "") + " progress"}</div>
+      <div class="vl">${s.uniq} <span class="faint">/ ${s.total}</span> <span style="font-size:17px" class="muted">${p}%</span></div>
+      <div class="bar ${s.uniq && s.uniq >= s.total ? "done" : ""}"><i style="width:${p}%"></i></div>
+      <div class="sub">${s.offTotal ? `Main set ${s.offOwned}/${s.offTotal} · ` : ""}Master set ${s.masterOwned}/${s.master} (all variants)</div></div>
+    <div class="stat panel"><div class="lb">Set value</div><div class="vl">${money(s.setVal)}</div><div class="sub">One of every card</div>${partial}</div>
+    <div class="stat panel"><div class="lb">Master set value</div><div class="vl">${money(s.masterVal)}</div><div class="sub">Every variant</div></div>
+    <div class="stat panel"><div class="lb">My cards</div><div class="vl" style="color:var(--good)">${money(s.myVal)}</div><div class="sub">${pct(s.myVal, s.masterVal)}% of master value</div></div>`;
+}
+
+const qcHTML = (n, name) => (n ? `<button data-act="minus" aria-label="Remove one ${esc(name || "")}">−</button><span class="cnt">${n}</span>` : "") + `<button data-act="add" aria-label="Add one ${esc(name || "")}">+</button>`;
+function tileHTML(c, setId, showSet){
+  const n = ownedCount(c.id);
+  const vs = variantsOf(setId, c.id);
+  const bp = priceOf(setId, c.id, vs[0]);
+  return `<div class="tile ${n ? "own" : ""}" data-id="${esc(c.id)}" data-set="${esc(setId)}">
+    <button class="art" data-act="open" aria-label="${esc(c.name)}">${imgTag(cardUrls(c, setId), c.name, `<div class="noimg"><b>#${esc(c.localId)}</b>${esc(c.name)}<span>No picture yet</span></div>`, true)}</button>
+    <div class="qc">${qcHTML(n, c.name)}</div>
+    <div class="meta"><span class="num">#${esc(c.localId)} ${esc(c.name)}</span><span class="price">${bp != null ? money(bp) : ""}</span></div>
+    ${showSet || c.sub ? `<div class="sname">${showSet && sinfo(setId).code ? `<span class="code">${esc(sinfo(setId).code)}</span> ` : ""}${esc(c.sub || setMeta(setId)?.name || setId)}</div>` : ""}
+    <div class="vd">${vs.length > 1 ? vs.map(v => `<i class="${qty(c.id, v) ? "on" : ""}" title="${VLABEL[v]}"></i>`).join("") : ""}</div>
+  </div>`;
+}
+function refreshTile(el){
+  const id = el.dataset.id, setId = el.dataset.set;
+  const n = ownedCount(id), vs = variantsOf(setId, id), bp = priceOf(setId, id, vs[0]);
+  el.classList.toggle("own", !!n);
+  el.querySelector(".qc").innerHTML = qcHTML(n);
+  el.querySelector(".price").textContent = bp != null ? money(bp) : "";
+  el.querySelector(".vd").innerHTML = vs.length > 1 ? vs.map(v => `<i class="${qty(id, v) ? "on" : ""}" title="${VLABEL[v]}"></i>`).join("") : "";
+}
+function refreshTiles(grid){ grid.querySelectorAll(".tile").forEach(refreshTile); }
+
+/* clicks on tiles: + adds the first variant, image opens the detail */
+function bindGrid(grid, setIdOf, cardOf, onChange){
+  grid.addEventListener("click", e => {
+    const b = e.target.closest("[data-act]"); if(!b) return;
+    const tile = b.closest(".tile"); const id = tile.dataset.id; const setId = tile.dataset.set || setIdOf();
+    const card = cardOf(id, tile); if(!card) return;
+    const vs = variantsOf(setId, id);
+    if(b.dataset.act === "add"){
+      // + adds one of the normal version (open the card for reverse holos etc.)
+      setQty(card, setId, vs[0], qty(id, vs[0]) + 1);
+      refreshTile(tile); onChange && onChange();
+      toast(`Added ${card.name} (${ownedCount(id)} owned)`);
+    }else if(b.dataset.act === "minus"){
+      // − removes one: from the normal version first, then the other versions
+      const v = qty(id, vs[0]) ? vs[0] : Object.keys(col.cards[id]?.q || {})[0];
+      if(!v) return;
+      setQty(card, setId, v, qty(id, v) - 1);
+      refreshTile(tile); onChange && onChange();
+      const left = ownedCount(id);
+      toast(left ? `Removed one ${card.name} (${left} left)` : `Removed ${card.name}`);
+    }else openCard(card, setId, () => { refreshTile(tile); onChange && onChange(); });
+  });
+}
+
+async function openCard(card, setId, onChange){
+  const render = () => {
+    const i = info(setId, card.id); const vs = variantsOf(setId, card.id);
+    let mine = 0;
+    vs.forEach(v => { const p = priceOf(setId, card.id, v); if(p != null) mine += p * qty(card.id, v); });
+    dlg.innerHTML = `<div style="position:relative"><button class="x" data-x aria-label="Close">×</button>
+      <div class="md">
+        <div class="big">${imgTag(cardUrls(card, setId, "high"), card.name, `<div class="noimg" style="height:100%;display:flex;align-items:center;justify-content:center">No picture yet</div>`, false)}</div>
+        <div>
+          <h3>${esc(card.name)}</h3>
+          <div class="muted">${esc(setMeta(setId)?.name || setId)}${card.sub ? " · " + esc(card.sub) : ""} · #${esc(card.localId)}${i?.r ? " · " + esc(i.r) : ""}</div>
+          <div style="margin-top:14px">
+            ${vs.map(v => `<div class="vrow"><div><div class="vn">${VLABEL[v] || v}</div><div class="vp">${i ? (priceOf(setId, card.id, v) != null ? money(priceOf(setId, card.id, v)) : "No price") : "Loading price…"}</div></div>
+              <div class="step"><button data-v="${v}" data-d="-1" aria-label="Remove one">−</button><span>${qty(card.id, v)}</span><button data-v="${v}" data-d="1" aria-label="Add one">+</button></div></div>`).join("")}
+          </div>
+          <p class="muted" style="margin-top:14px">Your copies are worth <b style="color:var(--good)">${money(mine)}</b></p>
+          <p style="font-size:13px"><a href="https://www.cardmarket.com/en/Pokemon/Products/Search?searchString=${encodeURIComponent(card.name)}" target="_blank" rel="noopener">Look up on Cardmarket ↗</a></p>
+        </div>
+      </div></div>`;
+  };
+  render();
+  dlg.onclick = e => {
+    if(e.target === dlg || e.target.closest("[data-x]")){ dlg.close(); return; }
+    const b = e.target.closest("[data-d]"); if(!b) return;
+    setQty(card, setId, b.dataset.v, qty(card.id, b.dataset.v) + (+b.dataset.d));
+    render(); onChange && onChange();
+  };
+  if(!dlg.open) dlg.showModal();
+  if(!info(setId, card.id)){
+    try{ prices(setId)[card.id] = slim(await getJSON("/cards/" + encodeURIComponent(card.id))); reconcile(setId, card.id); savePrices(setId); }catch(e){}
+    if(dlg.open){ render(); onChange && onChange(); }
+  }
+}
+
+async function viewCollection(){
+  main.innerHTML = loading("Adding up your collection…");
+  try{ await getSets(); }catch(e){}
+  const bySet = {};
+  Object.entries(col.cards).forEach(([id, e]) => (bySet[e.s] = bySet[e.s] || []).push([id, e]));
+  let total = 0, copies = 0, unpriced = 0;
+  const top = [];
+  const rows = Object.entries(bySet).map(([sid, list]) => {
+    let val = 0;
+    list.forEach(([id, e]) => Object.entries(e.q).forEach(([v, n]) => {
+      copies += n; const p = priceOf(sid, id, v);
+      if(p == null) unpriced += n; else { val += p * n; const t = top.find(x => x.id === id); if(t) t.p += p * n; else top.push({id, e, sid, p:p * n}); }
+    }));
+    total += val;
+    const m = Object.assign({name:sid, logo:""}, setMeta(sid) || {}, {total:setTotal(sid)});
+    return {sid, m, have:list.length, val};
+  }).sort((a, b) => pct(b.have, b.m.total) - pct(a.have, a.m.total));
+  top.sort((a, b) => b.p - a.p);
+  const uniq = Object.keys(col.cards).length;
+  main.innerHTML = `
+    <h1>My collection</h1>
+    <div class="stats">
+      <div class="stat panel hero"><div class="lb">Collection value</div><div class="vl" style="color:var(--good)">${money(total)}</div><div class="sub">${unpriced ? `${unpriced} copies have no price yet. Press Update prices.` : "Cardmarket trend prices"}</div></div>
+      <div class="stat panel"><div class="lb">Unique cards</div><div class="vl">${uniq}</div></div>
+      <div class="stat panel"><div class="lb">Total copies</div><div class="vl">${copies}</div></div>
+      <div class="stat panel"><div class="lb">Sets started</div><div class="vl">${rows.length}</div></div>
+    </div>
+    <div class="toolbar"><button class="btn" id="upd">Update prices</button><span class="loadnote" id="ln"></span></div>
+    ${rows.length ? `<h2>Sets</h2><div class="rows">${rows.map(r => {
+      const p = pct(r.have, r.m.total);
+      return `<a class="srow panel" href="#/set/${encodeURIComponent(r.sid)}">
+        <div>${imgTag(logoUrls({id:r.sid, logo:r.m.logo}), r.m.name, "", true)}</div>
+        <div><b>${esc(r.m.name)}</b> <span class="faint">${r.have} / ${r.m.total || "?"} · ${p}%</span><div class="bar ${r.m.total && r.have >= r.m.total ? "done" : ""}"><i style="width:${p}%"></i></div></div>
+        <div class="r">${money(r.val)}</div></a>`;
+    }).join("")}</div>
+    ${top.length ? `<h2>Most valuable cards</h2><div class="grid" id="top">${top.slice(0, 12).map(t => tileHTML({id:t.id, name:t.e.n, localId:t.e.l, image:t.e.i, rs:t.e.r}, t.sid, true)).join("")}</div>` : ""}`
+    : `<div class="panel" style="padding:22px;margin-top:10px"><b>Nothing here yet.</b><p class="muted">Go to <a href="#/sets">Sets</a>, open a set, and tap <b>+</b> on every card you own. Tap a card's picture to add reverse holos and other variants.</p></div>`}`;
+  const tg = document.getElementById("top");
+  if(tg) bindGrid(tg, null, (id) => { const e = col.cards[id]; return e && {id, name:e.n, localId:e.l, image:e.i, rs:e.r}; }, null);
+  document.getElementById("upd").onclick = async (ev) => {
+    ev.target.disabled = true;
+    const ln = document.getElementById("ln");
+    const jobs = Object.entries(bySet);
+    let k = 0;
+    for(const [sid, list] of jobs){
+      k++;
+      if(!document.body.contains(ln)) return;
+      ln.textContent = `Updating ${setMeta(sid)?.name || sid} (${k}/${jobs.length})…`;
+      await loadDetails(sid, list.map(([id]) => ({id})), null, true);
+    }
+    if(document.body.contains(ln)){ toast("Prices updated"); viewCollection(); }
+  };
+}
+
+async function viewSearch(){
+  try{ await getSets(); }catch(e){}
+  const last = sessionGet("setdex-q") || "";
+  main.innerHTML = `<h1>Search cards</h1>
+    <div class="toolbar"><input class="input" id="q" placeholder="Card name, e.g. Charizard" value="${esc(last)}" autocomplete="off"></div>
+    <div class="grid" id="res"></div>`;
+  const q = document.getElementById("q"), res = document.getElementById("res");
+  let t, n = 0, found = [];
+  const run = async () => {
+    const term = q.value.trim(); sessionSet("setdex-q", term);
+    if(term.length < 2){ res.innerHTML = `<p class="muted">Type at least 2 letters.</p>`; return; }
+    const my = ++n; res.innerHTML = loading("Searching…");
+    try{
+      const d = await getJSON("/cards?name=" + encodeURIComponent(term));
+      if(my !== n) return;
+      found = d.slice(-120).reverse().map(c => ({id:c.id, localId:String(c.localId), name:c.name, image:c.image || "", rs:c.id.slice(0, c.id.length - String(c.localId).length - 1)})).filter(c => !isPocket(c.rs)).map(c => Object.assign(c, {s:parentOf(c.rs)}));
+      res.innerHTML = found.length ? found.map(c => tileHTML(c, c.s, true)).join("") : `<p class="muted">No cards found.</p>`;
+    }catch(e){ if(my === n) res.innerHTML = `<p class="muted">Search failed. Check your internet connection.</p>`; }
+  };
+  q.addEventListener("input", () => { clearTimeout(t); t = setTimeout(run, 350); });
+  bindGrid(res, null, id => found.find(c => c.id === id), null);
+  if(last) run(); else res.innerHTML = `<p class="muted">Find a card across every set and add it to your collection.</p>`;
+  q.focus();
+}
+function sessionGet(k){ try{ return sessionStorage.getItem(k); }catch(e){ return null; } }
+function sessionSet(k, v){ try{ sessionStorage.setItem(k, v); }catch(e){} }
+
+function viewSettings(){
+  const s = col.settings;
+  main.innerHTML = `<h1>Settings</h1>
+    <div class="panel set-form" style="margin-top:16px">
+      <label>Show prices in
+        <select class="input" id="cur">${Object.entries(CURRENCIES).map(([k, v]) => `<option value="${k}">${v[0]}</option>`).join("")}</select></label>
+      <label style="display:flex;align-items:center;gap:10px;font-weight:600"><input type="checkbox" id="auto" ${s.auto ? "checked" : ""} style="width:18px;height:18px">Update exchange rates automatically</label>
+      <div id="fxinfo" class="muted" style="font-size:14px"></div>
+      <div id="manual"></div>
+    </div>
+    <h2>Sync with GitHub</h2>
+    <div class="panel set-form" id="syncinfo"></div>
+    <h2>Backup</h2>
+    <div class="panel set-form">
+      <p class="muted" style="margin:0">Your collection is saved in this browser on this device. Download a backup now and then, and use it to move your collection to another device or browser.</p>
+      <div class="chips"><button class="btn primary" id="exp">Download backup</button><button class="btn" id="imp">Restore from backup</button><input type="file" id="file" accept=".json,application/json" hidden></div>
+    </div>
+    <h2>Start fresh</h2>
+    <div class="panel set-form">
+      <p class="muted" style="margin:0">Remove every card from your collection. Your settings stay. To reset one set only, open it and press <b>Reset</b>.</p>
+      <div><button class="btn danger" id="wipe">Remove all my cards</button></div>
+    </div>
+    <h2>Price data</h2>
+    <div class="panel set-form">
+      <p class="muted" style="margin:0">Card data, pictures and prices come from the free <a href="https://tcgdex.dev" target="_blank" rel="noopener">TCGdex</a> database. Prices are Cardmarket trend prices in euro and update once a day. Other currencies are converted with the exchange rate above. Values are estimates, not what a shop will pay.</p>
+      <div><button class="btn" id="clr">Clear saved card data</button></div>
+    </div>`;
+  drawSyncInfo();
+  const cur = document.getElementById("cur"); cur.value = s.currency;
+  const drawFx = () => {
+    const c = s.currency;
+    const info = document.getElementById("fxinfo"), man = document.getElementById("manual");
+    if(s.auto){
+      info.innerHTML = fx ? `1 EUR = ${fx.rates[c] ? fx.rates[c].toFixed(4) + " " + c : "1 EUR"} · 1 USD = ${(1 / fx.rates.USD).toFixed(4)} EUR<br>European Central Bank rates from ${esc(fx.date)}, checked twice a day. <a href="#" id="fxnow">Update now</a>`
+        : `Couldn't get exchange rates yet. Check your internet connection. <a href="#" id="fxnow">Try again</a>`;
+      man.innerHTML = "";
+      const now = document.getElementById("fxnow");
+      if(now) now.onclick = async ev => { ev.preventDefault(); info.textContent = "Updating…"; const ok = await refreshRates(true); toast(ok ? "Exchange rates updated" : "Couldn't reach the exchange rate service"); drawFx(); };
+    }else{
+      info.textContent = "Using your own exchange rates:";
+      man.innerHTML = `<div style="display:grid;gap:10px">
+        ${c !== "EUR" ? `<label>1 EUR = how many ${c}<input class="input" id="mrate" type="number" step="0.0001" min="0" value="${s.manual[c] || fx?.rates?.[c] || ""}"></label>` : ""}
+        <label>1 USD = how many EUR <span class="faint" style="font-weight:400">Used only when a card has no Cardmarket price</span><input class="input" id="usd" type="number" step="0.0001" min="0" value="${s.usd}"></label></div>`;
+      const mr = document.getElementById("mrate");
+      if(mr) mr.onchange = e => { const v = parseFloat(e.target.value); if(v > 0){ s.manual[c] = v; touchSettings(); saveCol(); toast("Saved"); } };
+      document.getElementById("usd").onchange = e => { const v = parseFloat(e.target.value); if(v > 0){ s.usd = v; touchSettings(); saveCol(); toast("Saved"); } };
+    }
+  };
+  drawFx();
+  cur.onchange = () => { s.currency = cur.value; touchSettings(); saveCol(); drawFx(); toast("Saved"); };
+  document.getElementById("auto").onchange = e => { s.auto = e.target.checked; touchSettings(); saveCol(); drawFx(); if(s.auto) refreshRates().then(drawFx); };
+  document.getElementById("exp").onclick = () => {
+    const blob = new Blob([JSON.stringify({app:"setdex", version:1, saved:new Date().toISOString(), cards:col.cards, settings:col.settings}, null, 1)], {type:"application/json"});
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = `setdex-backup-${new Date().toISOString().slice(0,10)}.json`; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  };
+  const file = document.getElementById("file");
+  document.getElementById("imp").onclick = () => file.click();
+  file.onchange = async () => {
+    try{
+      const d = JSON.parse(await file.files[0].text());
+      if(!d || typeof d.cards !== "object") throw 0;
+      if(!confirm(`Replace your current collection with this backup (${Object.keys(d.cards).length} cards)?`)) return;
+      const t = Date.now();
+      Object.keys(col.cards).forEach(id => { if(!d.cards[id]) col.del[id] = t; });
+      Object.values(d.cards).forEach(e => e.u = t);
+      Object.keys(d.cards).forEach(id => delete col.del[id]);
+      col.cards = d.cards; col.settings = Object.assign({}, col.settings, d.settings || {}); touchSettings();
+      saveCol(); toast("Backup restored");
+    }catch(e){ toast("That file isn't a SetDex backup"); }
+    file.value = "";
+  };
+  document.getElementById("wipe").onclick = () => {
+    const ids = Object.keys(col.cards);
+    if(!ids.length){ toast("Your collection is already empty"); return; }
+    if(!confirm(`Remove all ${ids.length} cards from your collection?${sync ? "\n\nThis also removes them on your other synced devices." : ""}\n\nTip: download a backup first. You can also press Undo right after.`)) return;
+    removeCards(ids, "your collection");
+  };
+  document.getElementById("clr").onclick = () => {
+    try{ Object.keys(localStorage).filter(k => /^setdex-(p|set|sets)-?/.test(k) && k !== "setdex-collection").forEach(k => localStorage.removeItem(k)); }catch(e){}
+    Object.keys(priceMem).forEach(k => delete priceMem[k]); Object.keys(setMem).forEach(k => delete setMem[k]); setsList = null;
+    toast("Card data cleared. It reloads when you open a set.");
+  };
+}
+
+/* ---------- sync with a private GitHub repository ---------- */
+/* The token is kept only in this browser (setdex-sync), never in backups or in the synced file. */
+let sync = lsGet("setdex-sync", null);   // {repo:"owner/name", token, sha, last}
+const SYNC_FILE = "collection.json";
+let syncState = "", syncMsg = "", syncTimer = 0, syncing = null;
+function setSync(state, msg){
+  syncState = state; syncMsg = msg || "";
+  const el = document.getElementById("syncst"); if(!el) return;
+  el.hidden = !sync;
+  el.className = "syncst " + state;
+  el.innerHTML = `<span>${esc({ok:"Synced", busy:"Syncing…", err:"Sync problem"}[state] || "")}</span>`;
+  el.title = msg || "";
+  const info = document.getElementById("syncinfo"); if(info) drawSyncInfo();
+}
+function b64enc(str){
+  const bytes = new TextEncoder().encode(str); let bin = "";
+  for(let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+  return btoa(bin);
+}
+const b64dec = b64 => new TextDecoder().decode(Uint8Array.from(atob(b64.replace(/\s/g, "")), c => c.charCodeAt(0)));
+async function ghFetch(path, opts){
+  const r = await fetch("https://api.github.com" + path, Object.assign({cache:"no-store"}, opts, {headers:{
+    Authorization:"Bearer " + sync.token, Accept:"application/vnd.github+json", "X-GitHub-Api-Version":"2022-11-28",
+    ...(opts && opts.body ? {"Content-Type":"application/json"} : {})}}));
+  return r;
+}
+function ghError(r){
+  if(r.status === 401) return "GitHub didn't accept the token. It may be wrong or expired. Make a new one and connect again.";
+  if(r.status === 403) return "The token isn't allowed to change this repository. Give it Contents: Read and write.";
+  if(r.status === 404) return "Couldn't find the repository. Check the name, and that the token has access to it.";
+  return "GitHub answered with error " + r.status + ".";
+}
+async function readRemote(){
+  const r = await ghFetch(`/repos/${sync.repo}/contents/${SYNC_FILE}`);
+  if(r.status === 404) return {data:{cards:{}, del:{}}, sha:null};
+  if(!r.ok) throw new Error(ghError(r));
+  const j = await r.json();
+  let text = j.content ? b64dec(j.content) : "";
+  if(!text && j.sha){   // files over 1 MB come without content
+    const b = await ghFetch(`/repos/${sync.repo}/git/blobs/${j.sha}`);
+    if(!b.ok) throw new Error(ghError(b));
+    text = b64dec((await b.json()).content);
+  }
+  return {data:JSON.parse(text || "{}"), sha:j.sha};
+}
+/* newest change wins, card by card */
+function mergeInto(remote){
+  const rc = remote.cards || {}, rd = remote.del || {};
+  const ids = new Set([...Object.keys(col.cards), ...Object.keys(col.del), ...Object.keys(rc), ...Object.keys(rd)]);
+  const cards = {}, del = {}, old = Date.now() - 180 * DAY;
+  ids.forEach(id => {
+    const a = col.cards[id], b = rc[id];
+    const best = a && b ? ((b.u || 0) > (a.u || 0) ? b : a) : (a || b);
+    const dt = Math.max(col.del[id] || 0, rd[id] || 0);
+    if(best && (best.u || 0) >= dt) cards[id] = best;
+    else if(dt > old) del[id] = dt;
+  });
+  col.cards = cards; col.del = del;
+  if((remote.su || 0) > (col.su || 0) && remote.settings){ col.settings = Object.assign({}, col.settings, remote.settings); col.su = remote.su; }
+}
+const payload = () => JSON.stringify({app:"setdex", version:2, updated:new Date().toISOString(), cards:col.cards, del:col.del, settings:col.settings, su:col.su || 0});
+const sameData = (a, b) => JSON.stringify([a.cards || {}, a.del || {}, a.su || 0]) === JSON.stringify([b.cards || {}, b.del || {}, b.su || 0]);
+async function syncNow(){
+  if(!sync?.token) return false;
+  if(syncing) return syncing;
+  syncing = (async () => {
+    setSync("busy");
+    const before = JSON.stringify([col.cards, col.settings]);
+    for(let attempt = 0; attempt < 3; attempt++){
+      try{
+        const {data, sha} = await readRemote();
+        mergeInto(data);
+        lsSet("setdex-collection", col);
+        if(!sha || !sameData(data, col)){
+          const n = Object.keys(col.cards).length;
+          const r = await ghFetch(`/repos/${sync.repo}/contents/${SYNC_FILE}`, {method:"PUT", body:JSON.stringify({
+            message:`Update collection (${n} card${n === 1 ? "" : "s"})`, content:b64enc(payload()), ...(sha ? {sha} : {})})});
+          if(r.status === 409 || r.status === 422){ continue; }   // changed on another device meanwhile: read again
+          if(!r.ok) throw new Error(ghError(r));
+          sync.sha = (await r.json()).content?.sha;
+        }else sync.sha = sha;
+        sync.last = Date.now(); lsSet("setdex-sync", sync);
+        setSync("ok", "Last synced " + new Date(sync.last).toLocaleString());
+        if(JSON.stringify([col.cards, col.settings]) !== before && !dlg.open && !/settings/.test(location.hash)) route();
+        return true;
+      }catch(e){
+        setSync("err", e.message === "Failed to fetch" ? "Couldn't reach GitHub. You may be offline; changes are saved on this device and will sync later." : e.message);
+        return false;
+      }
+    }
+    setSync("err", "Couldn't save to GitHub after several tries. Try Sync now.");
+    return false;
+  })();
+  try{ return await syncing; } finally{ syncing = null; }
+}
+function syncSoon(){
+  if(!sync?.token) return;
+  setSync("busy");
+  clearTimeout(syncTimer); syncTimer = setTimeout(syncNow, 2500);
+}
+let lastFocusSync = 0;
+function syncOnFocus(){
+  if(!sync?.token || document.visibilityState !== "visible" || Date.now() - lastFocusSync < 30000) return;
+  lastFocusSync = Date.now(); syncNow();
+}
+document.addEventListener("visibilitychange", syncOnFocus);
+window.addEventListener("online", () => sync && syncNow());
+
+function drawSyncInfo(){
+  const box = document.getElementById("syncinfo"); if(!box) return;
+  if(sync){
+    box.innerHTML = `<p style="margin:0">Connected to <b>${esc(sync.repo)}</b>.<br><span class="${syncState === "err" ? "" : "muted"}" style="${syncState === "err" ? "color:var(--accent)" : ""}">${esc(syncMsg || (sync.last ? "Last synced " + new Date(sync.last).toLocaleString() : ""))}</span></p>
+      <div class="chips"><button class="btn primary" id="syncnow">Sync now</button><button class="btn" id="syncoff">Disconnect this device</button></div>`;
+    document.getElementById("syncnow").onclick = () => syncNow();
+    document.getElementById("syncoff").onclick = () => {
+      if(!confirm("Disconnect this device from GitHub? Your cards stay on this device and in your GitHub repository.")) return;
+      sync = null; try{ localStorage.removeItem("setdex-sync"); }catch(e){}
+      setSync(""); drawSyncInfo(); toast("Disconnected");
+    };
+  }else{
+    const owner = /\.github\.io$/.test(location.hostname) ? location.hostname.split(".")[0] : "";
+    box.innerHTML = `
+      <p class="muted" style="margin:0">Save your collection in your own private GitHub repository, so it's the same on all your devices and GitHub keeps every version. The token is stored only in this browser.</p>
+      <ol class="steps">
+        <li>Open <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener">github.com/settings/personal-access-tokens/new</a></li>
+        <li>Name it <b>SetDex</b> and pick an expiry date (1 year is fine).</li>
+        <li>Repository access: <b>Only select repositories</b> → <b>setdex-data</b>.</li>
+        <li>Permissions → Repository permissions → <b>Contents: Read and write</b>. Nothing else.</li>
+        <li>Generate the token, copy it and paste it below.</li>
+      </ol>
+      <label>Data repository<input class="input" id="srepo" placeholder="your-name/setdex-data" value="${esc(owner ? owner + "/setdex-data" : "")}" autocomplete="off" spellcheck="false"></label>
+      <label>Token<input class="input" id="stoken" type="password" placeholder="github_pat_…" autocomplete="off" spellcheck="false"></label>
+      <div><button class="btn primary" id="sconn">Connect</button></div>`;
+    document.getElementById("sconn").onclick = async ev => {
+      const repo = document.getElementById("srepo").value.trim().replace(/^https:\/\/github\.com\//, "").replace(/\/$/, "");
+      const token = document.getElementById("stoken").value.trim();
+      if(!/^[\w.-]+\/[\w.-]+$/.test(repo)){ toast("Write the repository as name/setdex-data"); return; }
+      if(!token){ toast("Paste your token first"); return; }
+      ev.target.disabled = true; ev.target.textContent = "Checking…";
+      sync = {repo, token};
+      try{
+        const r = await ghFetch(`/repos/${repo}`);
+        if(!r.ok) throw new Error(ghError(r));
+        const j = await r.json();
+        if(!j.private && !confirm(`${repo} is PUBLIC, so anyone could see your collection. Use it anyway?\n\nBetter: make it private in the repository's Settings first.`)) throw new Error("");
+        if(j.permissions && !j.permissions.push) throw new Error("The token can read but not change this repository. Give it Contents: Read and write.");
+        lsSet("setdex-sync", sync);
+        drawSyncInfo();
+        const ok = await syncNow();
+        toast(ok ? "Connected. Your collection is synced." : "Connected, but the first sync had a problem");
+        drawSyncInfo();
+      }catch(e){
+        sync = null;
+        if(e.message) toast(e.message === "Failed to fetch" ? "Couldn't reach GitHub" : e.message);
+        ev.target.disabled = false; ev.target.textContent = "Connect";
+      }
+    };
+  }
+}
+
+/* ---------- router ---------- */
+function route(){
+  loadToken++;
+  if(dlg.open) dlg.close();
+  const [view, arg, arg2] = (location.hash.replace(/^#\/?/, "") || "sets").split("/");
+  document.querySelectorAll("[data-nav]").forEach(a => a.classList.toggle("on", a.dataset.nav === (view === "set" ? "sets" : view)));
+  window.scrollTo(0, 0);
+  if(view === "set" && arg) viewSet(decodeURIComponent(arg), arg2 ? decodeURIComponent(arg2) : "main");
+  else if(view === "collection") viewCollection();
+  else if(view === "search") viewSearch();
+  else if(view === "settings") viewSettings();
+  else viewSets();
+}
+window.addEventListener("hashchange", route);
+route();
+if(sync){ setSync("busy"); syncNow(); }
+/* fetch exchange rates in the background; redraw once if this is the first time */
+refreshRates().then(changed => { if(changed && col.settings.currency !== "EUR" && !dlg.open && !/settings/.test(location.hash)) route(); });
+</script>
+</body>
+</html>
