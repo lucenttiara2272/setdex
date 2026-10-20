@@ -417,7 +417,12 @@ async function getSet(id){
   });
   (PREFIX_SUBS[id] || []).forEach(v => {
     let n = 0;
-    d.cards.forEach(c => { if(!c.part && prefixPart(id, c.localId) === v){ c.sub = v.name; c.part = v.key; n++; } });
+    d.cards.forEach(c => {
+      if(c.part || prefixPart(id, c.localId) !== v) return;
+      c.sub = v.name; c.part = v.key; n++;
+      // a number range (Pikachu 023–052) is part of the main set AND its own collection with its own number (02/30)
+      if(!v.pre){ c.inMain = true; c.subNo = String(+c.localId - v.from + 1).padStart(2, "0") + "/" + v.total; }
+    });
     if(n) d.subs.push({id:v.key, name:v.name});
   });
   // Subsets printed inside the main set (Pikachu Collection 023–052, Radiant Collection RC1…) stay in their
@@ -681,7 +686,7 @@ function setStats(set, cards){
     const i = ps[c.id]; const vs = i?.v || ["normal"]; const e = col.cards[c.id];
     const has = e && Object.keys(e.q).length;
     if(i) known++;
-    if(!c.part && isOfficial(c.localId, off)){ offTotal++; if(has) offOwned++; }
+    if((!c.part || c.inMain) && isOfficial(c.localId, off)){ offTotal++; if(has) offOwned++; }
     if(has) uniq++;
     master += vs.length;
     vs.forEach(v => { const p = i?.p?.[v]; if(p != null) masterVal += p; if(e?.q?.[v]) masterOwned++; });
@@ -782,7 +787,7 @@ async function viewSet(id, part){
   else if(part !== "all" && part !== "main" && !set.subs.some(x => x.id === part)) part = "main";
   current = {set, part};
   await fillOwnPrices(set.id);   // today's prices from our own daily file, before the first paint
-  const mainCount = set.cards.filter(c => !c.part).length;
+  const mainCount = set.cards.filter(c => !c.part || c.inMain).length;
   const tabs = set.subs?.length ? `<div class="tabs">${[["main", set.name, mainCount], ...set.subs.map(x => [x.id, x.name, set.cards.filter(c => c.part === x.id).length]), ["all", set.subs.length > 1 ? "All" : "Both", set.cards.length]]
     .map(([k, n, c]) => `<a class="tab ${k === part ? "on" : ""}" href="#/set/${encodeURIComponent(set.id)}/${encodeURIComponent(k)}">${esc(n)} <span>${c}</span></a>`).join("")}</div>` : "";
   main.innerHTML = `
@@ -877,7 +882,7 @@ function missingNote(set){
 /* cards shown on the open set page: main set, one subset, or both */
 function partCards(){
   const {set, part} = current;
-  if(part === "main") return set.cards.filter(c => !c.part);
+  if(part === "main") return set.cards.filter(c => !c.part || c.inMain);
   if(part && part !== "all") return set.cards.filter(c => c.part === part);
   return set.cards;
 }
@@ -908,7 +913,7 @@ function tileHTML(c, setId, showSet, opt){
     <button class="art" data-act="open" aria-label="${esc(c.name)}">${imgTag(cardUrls(c, setId), c.name, `<div class="noimg"><b>#${esc(c.localId)}</b>${esc(c.name)}<span>No picture yet</span></div>`, true)}<span class="flags">${opt.noqc ? "" : flagsHTML(c.id)}</span></button>
     ${opt.noqc ? "" : `<div class="qc">${qcHTML(n, c.name)}</div>`}
     <div class="meta"><span class="num">#${esc(c.localId)} ${esc(c.name)}</span><span class="price">${bp != null ? money(bp) : ""}</span></div>
-    ${showSet || c.sub ? `<div class="sname">${showSet && sinfo(setId).code ? `<span class="code">${esc(sinfo(setId).code)}</span> ` : ""}${esc(c.sub || setMeta(setId)?.name || setId)}</div>` : ""}
+    ${showSet || c.sub ? `<div class="sname">${showSet && sinfo(setId).code ? `<span class="code">${esc(sinfo(setId).code)}</span> ` : ""}${esc(c.sub ? c.sub + (c.subNo ? " " + c.subNo : "") : (setMeta(setId)?.name || setId))}</div>` : ""}
     ${opt.note ? `<div class="sname tnote">${opt.note}</div>` : ""}
     <div class="vd">${vs.length > 1 ? vs.map(v => `<i class="${qty(c.id, v) ? "on" : ""}" title="${VLABEL[v]}"></i>`).join("") : ""}</div>
   </div>`;
