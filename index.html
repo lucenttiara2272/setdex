@@ -980,7 +980,12 @@ async function ghFetch(path, opts){
     ...(opts && opts.body ? {"Content-Type":"application/json"} : {})}}));
   return r;
 }
-function ghError(r){
+async function ghError(r){
+  let gm = ""; try{ gm = (await r.clone().json()).message || ""; }catch(e){}
+  const base = ghErrorText(r);
+  return gm ? `${base} (GitHub says: "${gm}")` : base;
+}
+function ghErrorText(r){
   if(r.status === 401) return "GitHub didn't accept the token. It may be wrong or expired. Make a new one and connect again.";
   if(r.status === 403) return "The token isn't allowed to change this repository. Give it Contents: Read and write.";
   if(r.status === 404) return "Couldn't find the repository. Check the name, and that the token has access to it.";
@@ -989,12 +994,12 @@ function ghError(r){
 async function readRemote(){
   const r = await ghFetch(`/repos/${sync.repo}/contents/${SYNC_FILE}`);
   if(r.status === 404) return {data:{cards:{}, del:{}}, sha:null};
-  if(!r.ok) throw new Error(ghError(r));
+  if(!r.ok) throw new Error(await ghError(r));
   const j = await r.json();
   let text = j.content ? b64dec(j.content) : "";
   if(!text && j.sha){   // files over 1 MB come without content
     const b = await ghFetch(`/repos/${sync.repo}/git/blobs/${j.sha}`);
-    if(!b.ok) throw new Error(ghError(b));
+    if(!b.ok) throw new Error(await ghError(b));
     text = b64dec((await b.json()).content);
   }
   return {data:JSON.parse(text || "{}"), sha:j.sha};
@@ -1032,7 +1037,7 @@ async function syncNow(){
           const r = await ghFetch(`/repos/${sync.repo}/contents/${SYNC_FILE}`, {method:"PUT", body:JSON.stringify({
             message:`Update collection (${n} card${n === 1 ? "" : "s"})`, content:b64enc(payload()), ...(sha ? {sha} : {})})});
           if(r.status === 409 || r.status === 422){ continue; }   // changed on another device meanwhile: read again
-          if(!r.ok) throw new Error(ghError(r));
+          if(!r.ok) throw new Error(await ghError(r));
           sync.sha = (await r.json()).content?.sha;
         }else sync.sha = sha;
         sync.last = Date.now(); lsSet("setdex-sync", sync);
@@ -1096,7 +1101,7 @@ function drawSyncInfo(){
       sync = {repo, token};
       try{
         const r = await ghFetch(`/repos/${repo}`);
-        if(!r.ok) throw new Error(ghError(r));
+        if(!r.ok) throw new Error(await ghError(r));
         const j = await r.json();
         if(!j.private && !confirm(`${repo} is PUBLIC, so anyone could see your collection. Use it anyway?\n\nBetter: make it private in the repository's Settings first.`)) throw new Error("");
         if(j.permissions && !j.permissions.push) throw new Error("The token can read but not change this repository. Give it Contents: Read and write.");
