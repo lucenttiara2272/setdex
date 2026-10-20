@@ -573,17 +573,22 @@ function cardUrls(c, setId, q){
   // TCGdex English first, then the Pokémon TCG API, then TCGdex in other languages
   return c.image ? [img(c.image, q), ...ptcg, ...alt.slice(1)] : [...(c.guess ? alt.slice(0, 1) : []), ...ptcg, ...alt.slice(1)];
 }
+/* set logos and symbols from the Pokémon TCG API (official images, made for apps) */
+const PTCG_SCRYDEX = new Set(["me2pt5","me3","me4","me5","me55","me55c"]);
+const ptcgArt = (setId, kind) => { const pid = PTCG[setId]; if(!pid) return "";
+  return PTCG_SCRYDEX.has(pid) ? `https://images.scrydex.com/pokemon/${pid}-${kind}/${kind}` : `https://images.pokemontcg.io/${pid}/${kind}.png`; };
 function logoUrls(s){
   const sid = sinfo(s.id).serieId;
   const alt = sid ? LANGS.map(l => `https://assets.tcgdex.net/${l}/${sid}/${s.id}/logo.webp`) : [];
   const cover = sid ? ["en","fr"].map(l => `https://assets.tcgdex.net/${l}/${sid}/${s.id}/1/low.webp`) : [];
-  return s.logo ? [logo(s.logo), ...alt.slice(1), ...cover] : [...alt, ...cover];
+  // TCGdex logo, then the Pokémon TCG API logo, then other languages, then the first card as a cover
+  return [...(s.logo ? [logo(s.logo)] : []), ptcgArt(s.id, "logo"), ...alt.slice(1), ...cover].filter(Boolean);
 }
-const symUrl = s => s.symbol ? s.symbol + ".webp" : "";
+const symUrls = s => [s.symbol ? s.symbol + ".webp" : "", ptcgArt(s.id, "symbol")].filter(Boolean);
 function markHTML(s, withYear){
-  const i = sinfo(s.id), sym = symUrl(s);
+  const i = sinfo(s.id), sym = symUrls(s);
   const date = i.date || s.releaseDate || "";
-  return `<div class="mark">${sym ? imgTag([sym], "", "", true).replace("<img", '<img class="sym"') : ""}${i.code ? `<span class="code">${esc(i.code)}</span>` : ""}${withYear && date ? `<span class="yr">${esc(date.slice(0, 4))}</span>` : ""}</div>`;
+  return `<div class="mark">${sym.length ? imgTag(sym, "", "", true).replace("<img", '<img class="sym"') : ""}${i.code ? `<span class="code">${esc(i.code)}</span>` : ""}${withYear && date ? `<span class="yr">${esc(date.slice(0, 4))}</span>` : ""}</div>`;
 }
 const isOfficial = (localId, off) => /^\d+$/.test(localId) && +localId <= off;
 let toastT;
