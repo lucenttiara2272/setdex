@@ -420,8 +420,9 @@ async function getSet(id){
     d.cards.forEach(c => { if(!c.part && prefixPart(id, c.localId) === v){ c.sub = v.name; c.part = v.key; n++; } });
     if(n) d.subs.push({id:v.key, name:v.name});
   });
-  // subset cards after the main set
-  d.cards = [...d.cards.filter(c => !c.part), ...d.subs.flatMap(x => d.cards.filter(c => c.part === x.id))];
+  // Subsets printed inside the main set (Pikachu Collection 023–052, Radiant Collection RC1…) stay in their
+  // place in the numbering; subsets that are separate sets (Classic Collection, Trainer Gallery…) come after.
+  d.cards = [...d.cards.filter(c => !c.rs), ...d.subs.flatMap(x => d.cards.filter(c => c.rs && c.part === x.id))];
   d.total = d.cards.length;
   return setMem[id] = d;
 }
@@ -843,7 +844,8 @@ async function viewSet(id, part){
     let last = null;
     grid.innerHTML = cards.length ? cards.map(c => {
       let h = "";
-      if(sectioned && (c.sub || "") !== last){ last = c.sub || ""; h = `<div class="sec">${esc(c.sub || set.name)}</div>`; }
+      const sec = c.rs ? c.sub : "";   // only separate subsets get their own heading
+      if(sectioned && sec !== last){ last = sec; h = `<div class="sec">${esc(sec || set.name)}</div>`; }
       return h + tileHTML(c, set.id);
     }).join("") : `<p class="muted">${cardFilter === "have" ? "No cards from this set yet." : "You have every card in this set. Nice!"}</p>`;
   }
