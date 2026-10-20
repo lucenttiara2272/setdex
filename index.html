@@ -134,6 +134,16 @@ h2{font-size:17px;margin:26px 0 10px;letter-spacing:-.01em}
 .legal p b{color:var(--ink)}
 .welcome{padding:18px;margin-bottom:22px;border-color:var(--accent)}
 .welcome .wname{display:grid;gap:6px;font-weight:600;font-size:14px;max-width:420px}
+.gsec{margin-top:14px;padding-top:12px;border-top:1px solid var(--line)}
+.gh{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.grow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+.slab{font-weight:800;font-size:12px;padding:3px 8px;border-radius:6px;background:linear-gradient(#F4C430,#D9A400);color:#1a1300;letter-spacing:.02em}
+.gv{font-weight:700;margin-left:auto}
+.gbtns{display:flex;gap:4px}
+.gform{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.gform label{display:grid;gap:4px;font-size:13px;font-weight:600}
+.gform p,.gform .chips{grid-column:1/-1}
+.fl.g{background:linear-gradient(#F4C430,#D9A400);color:#1a1300}
 .sets-group{margin:22px 0 10px;font-size:15px;font-weight:700;color:var(--ink-2);display:flex;align-items:center;gap:10px}
 .sets-group::after{content:"";flex:1;height:1px;background:var(--line)}
 .mark{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-3);min-height:20px}
@@ -370,7 +380,21 @@ function matches(b){
 /* collection entry: col.cards[cardId] = {s:setId, n:name, l:localId, i:imageBase, q:{variant:count}} */
 const entry = id => col.cards[id];
 const qty = (id, v) => col.cards[id]?.q?.[v] || 0;
-const ownedCount = id => { const e = col.cards[id]; return e ? Object.values(e.q).reduce((a,b)=>a+b,0) : 0; };
+const ownedCount = id => { const e = col.cards[id]; return e ? Object.values(e.q).reduce((a,b)=>a+b,0) + (e.g ? e.g.length : 0) : 0; };
+/* graded copies: col.cards[id].g = [{c:"PSA", gr:"10", v:"normal", amt:1200, cur:"NOK", cert:""}] */
+const GRADERS = ["PSA", "BGS", "CGC", "TAG", "ACE", "SGC", "PCA", "Other"];
+const GRADES = ["10 Black Label", "10 Pristine", "10", "9.5", "9", "8.5", "8", "7.5", "7", "6.5", "6", "5.5", "5", "4.5", "4", "3.5", "3", "2.5", "2", "1.5", "1"];
+const gradedList = id => col.cards[id]?.g || [];
+const gradedEur = x => { if(!x.amt) return null; const r = eurRate(x.cur || "EUR"); return x.amt / (r || 1); };
+const gradedTotal = id => gradedList(id).reduce((a, x) => a + (gradedEur(x) || 0), 0);
+function saveGraded(card, setId, list){
+  let e = col.cards[card.id];
+  if(!e){ if(!list.length) return; e = col.cards[card.id] = {s:setId, n:card.name, l:card.localId, i:card.image || "", q:{}}; if(card.rs) e.r = card.rs; }
+  if(list.length) e.g = list; else delete e.g;
+  if(!Object.keys(e.q).length && !e.g) delete col.cards[card.id];
+  if(list.length && col.wants[card.id]){ delete col.wants[card.id]; col.del["w:" + card.id] = Date.now(); }
+  touch(card.id); saveCol();
+}
 function setQty(card, setId, v, n){
   n = Math.max(0, Math.min(999, n|0));
   let e = col.cards[card.id];
@@ -378,7 +402,7 @@ function setQty(card, setId, v, n){
   if(card.rs) e.r = card.rs;
   if(n) e.q[v] = n; else delete e.q[v];
   if(e.t){ if((e.t[v] || 0) > n){ if(n) e.t[v] = n; else delete e.t[v]; } if(!Object.keys(e.t).length) delete e.t; }
-  if(!Object.keys(e.q).length) delete col.cards[card.id];
+  if(!Object.keys(e.q).length && !(e.g && e.g.length)) delete col.cards[card.id];
   if(n && col.wants[card.id]){ delete col.wants[card.id]; col.del["w:" + card.id] = Date.now(); }   // got it: off the wants list
   touch(card.id);
   saveCol();
@@ -539,6 +563,7 @@ function reconcile(setId, id){
   for(const k of Object.keys(e.q)){
     if(!i.v.includes(k)){ e.q[i.v[0]] = (e.q[i.v[0]] || 0) + e.q[k]; delete e.q[k]; changed = true; }
   }
+  (e.g || []).forEach(x => { if(!i.v.includes(x.v)){ x.v = i.v[0]; changed = true; } });
   if(changed){ touch(id); saveCol(); }
   return changed;
 }
@@ -722,16 +747,17 @@ function setStats(set, cards){
   let uniq = 0, offTotal = 0, offOwned = 0, master = 0, masterOwned = 0, setVal = 0, masterVal = 0, myVal = 0, priced = 0, known = 0, offVal = 0;
   for(const c of cards){
     const i = ps[c.id]; const vs = i?.v || ["normal"]; const e = col.cards[c.id];
-    const has = e && Object.keys(e.q).length;
+    const has = e && (Object.keys(e.q).length || e.g?.length);
     if(i) known++;
     const inOff = (!c.part || c.inMain) && isOfficial(c.localId, off);
     if(inOff){ offTotal++; if(has) offOwned++; }
     if(has) uniq++;
     master += vs.length;
-    vs.forEach(v => { const p = i?.p?.[v]; if(p != null) masterVal += p; if(e?.q?.[v]) masterOwned++; });
+    vs.forEach(v => { const p = i?.p?.[v]; if(p != null) masterVal += p; if(e?.q?.[v] || e?.g?.some(x => x.v === v)) masterOwned++; });
     const bp = i?.p?.[vs[0]];
     if(bp != null){ setVal += bp; priced++; if(inOff) offVal += bp; }
     if(e) for(const [v, n] of Object.entries(e.q)){ const p = i?.p?.[v]; if(p != null) myVal += p * n; }
+    if(e?.g) myVal += gradedTotal(c.id);
   }
   return {offVal, uniq, total:cards.length, offOwned, offTotal, master, masterOwned, setVal, masterVal, myVal, priced, known};
 }
@@ -740,7 +766,7 @@ function setStats(set, cards){
 const helpHTML = () => `
   <div class="gstep"><span class="gn">1</span><div><b>Pick your name</b><p>There's no account to make. Your name is only shown to friends when you share your binder. You can change it any time on the <a href="#/trade">Trade</a> page.</p></div></div>
   <div class="gstep"><span class="gn">2</span><div><b>Put SetDex on your home screen</b><p><b>iPhone:</b> in Safari, tap Share → <b>Add to Home Screen</b>. <b>Android:</b> in Chrome, tap ⋮ → <b>Install app</b>. Then it opens like an app, works offline, and your phone won't clear your cards.</p></div></div>
-  <div class="gstep"><span class="gn">3</span><div><b>Add your cards</b><p>Open <a href="#/sets">Sets</a>, pick a set and tap <b>+</b> on each card you have (<b>−</b> removes one). Tap the card picture for reverse holos and other versions. Missing cards stay grey. <a href="#/collection">Collection</a> shows what everything is worth.</p></div></div>
+  <div class="gstep"><span class="gn">3</span><div><b>Add your cards</b><p>Open <a href="#/sets">Sets</a>, pick a set and tap <b>+</b> on each card you have (<b>−</b> removes one). Tap the card picture for reverse holos and other versions, and to add <b>graded</b> cards (PSA, BGS, CGC …) with their value. Missing cards stay grey. <a href="#/collection">Collection</a> shows what everything is worth.</p></div></div>
   <div class="gstep"><span class="gn">4</span><div><b>Mark wants and trades</b><p>Open a card and tap <b>♡ Add to wants</b>, or press <b>♡ Want missing</b> on a set. Use the <b>For trade</b> counter on cards you'd swap, or on Trade press <b>Put my duplicates up for trade</b>.</p></div></div>
   <div class="gstep"><span class="gn">5</span><div><b>Trade with friends</b><p>On <a href="#/trade">Trade</a>, press <b>Share my binder</b> and send the link. When a friend sends you theirs, open it to see what you can swap and what it's worth, then press <b>Save friend</b>.</p></div></div>
   <div class="gstep"><span class="gn">6</span><div><b>Keep your cards safe</b><p>Your cards are saved on this device, so you don't need GitHub or any account to use SetDex. Now and then press <b>Download backup</b> in <a href="#/settings">Settings</a>.</p><p><b>Optional:</b> if you want the same collection on your phone <i>and</i> your computer, set up <b>Sync with GitHub</b> in Settings. It's free, takes about 5 minutes, and the guide there walks you through it.</p></div></div>`;
@@ -953,7 +979,8 @@ function drawStats(){
 }
 
 const qcHTML = (n, name) => (n ? `<button data-act="minus" aria-label="Remove one ${esc(name || "")}">−</button><span class="cnt">${n}</span>` : "") + `<button data-act="add" aria-label="Add one ${esc(name || "")}">+</button>`;
-const flagsHTML = id => (tradeCount(id) ? `<span class="fl t">${tradeCount(id)} for trade</span>` : "") + (isWanted(id) ? `<span class="fl w">♥ Want</span>` : "");
+const gradeLabel = x => `${x.c === "Other" ? "Graded" : x.c} ${x.gr}`;
+const flagsHTML = id => (gradedList(id).length ? `<span class="fl g">${esc(gradeLabel(gradedList(id)[0]))}${gradedList(id).length > 1 ? " +" + (gradedList(id).length - 1) : ""}</span>` : "") + (tradeCount(id) ? `<span class="fl t">${tradeCount(id)} for trade</span>` : "") + (isWanted(id) ? `<span class="fl w">♥ Want</span>` : "");
 function tileHTML(c, setId, showSet, opt){
   opt = opt || {};
   const n = ownedCount(c.id);
@@ -1003,10 +1030,32 @@ function bindGrid(grid, setIdOf, cardOf, onChange){
 }
 
 async function openCard(card, setId, onChange){
+  let gform = null;   // null, or {k: index being edited (-1 = new)}
   const render = () => {
     const i = info(setId, card.id); const vs = variantsOf(setId, card.id);
-    let mine = 0;
+    let mine = gradedTotal(card.id);
     vs.forEach(v => { const p = priceOf(setId, card.id, v); if(p != null) mine += p * qty(card.id, v); });
+    const gl = gradedList(card.id), cur = col.settings.currency;
+    const gx = gform && gform.k >= 0 ? gl[gform.k] : {c:"PSA", gr:"10", v:vs[0], amt:"", cur, cert:""};
+    const sold = x => `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(`${card.name} ${card.localId} ${setMeta(setId)?.name || ""} ${x.c === "Other" ? "" : x.c} ${x.gr}`)}&LH_Sold=1&LH_Complete=1`;
+    const certUrl = x => !x.cert ? "" : x.c === "PSA" ? `https://www.psacard.com/cert/${encodeURIComponent(x.cert)}` : x.c === "CGC" ? `https://www.cgccards.com/certlookup/${encodeURIComponent(x.cert)}/` : "";
+    const gradedHTML = `<div class="gsec">
+      <div class="gh"><b>Graded copies</b>${gform ? "" : `<button class="btn small" data-gadd>+ Add graded copy</button>`}</div>
+      ${gl.map((x, k) => `<div class="grow"><span class="slab">${esc(gradeLabel(x))}</span><span class="faint">${esc(VLABEL[x.v] || x.v)}</span>
+        <span class="gv">${x.amt ? money(gradedEur(x)) : "no value"}</span>
+        ${x.cert ? (certUrl(x) ? `<a class="faint" href="${esc(certUrl(x))}" target="_blank" rel="noopener">#${esc(x.cert)}</a>` : `<span class="faint">#${esc(x.cert)}</span>`) : ""}
+        <span class="gbtns"><button class="btn small" data-gedit="${k}">Edit</button><button class="btn small" data-gdel="${k}" aria-label="Remove">×</button></span></div>`).join("")}
+      ${!gl.length && !gform ? `<p class="faint" style="margin:4px 0 0;font-size:13px">Got this card in a slab? Add it with its grade and value.</p>` : ""}
+      ${gform ? `<div class="gform">
+        <label>Graded by<select class="input" id="g_c">${GRADERS.map(o => `<option ${o === gx.c ? "selected" : ""}>${o}</option>`).join("")}</select></label>
+        <label>Grade<select class="input" id="g_gr">${GRADES.map(o => `<option ${o === gx.gr ? "selected" : ""}>${o}</option>`).join("")}</select></label>
+        ${vs.length > 1 ? `<label>Version<select class="input" id="g_v">${vs.map(o => `<option value="${o}" ${o === gx.v ? "selected" : ""}>${VLABEL[o] || o}</option>`).join("")}</select></label>` : ""}
+        <label>Value (${esc(gx.cur || cur)})<input class="input" id="g_amt" type="number" min="0" step="any" inputmode="decimal" value="${esc(gx.amt)}" placeholder="What it sells for"></label>
+        <label>Cert number <span class="faint" style="font-weight:400">optional</span><input class="input" id="g_cert" value="${esc(gx.cert || "")}" autocomplete="off"></label>
+        <p style="margin:0;font-size:13px"><a id="g_sold" href="${esc(sold(gx))}" target="_blank" rel="noopener">Check sold prices on eBay ↗</a></p>
+        <div class="chips"><button class="btn primary small" data-gsave>Save</button><button class="btn small" data-gcancel>Cancel</button></div>
+      </div>` : ""}
+    </div>`;
     dlg.innerHTML = `<div style="position:relative"><button class="x" data-x aria-label="Close">×</button>
       <div class="md">
         <div class="big">${imgTag(cardUrls(card, setId, "high"), card.name, `<div class="noimg" style="height:100%;display:flex;align-items:center;justify-content:center">No picture yet</div>`, false)}</div>
@@ -1014,10 +1063,12 @@ async function openCard(card, setId, onChange){
           <h3>${esc(card.name)}</h3>
           <div class="muted">${esc(setMeta(setId)?.name || setId)}${card.sub ? " · " + esc(card.sub) : ""} · #${esc(card.localId)}${i?.r ? " · " + esc(i.r) : ""}</div>
           <div style="margin-top:14px">
+            <div class="faint" style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em">Ungraded</div>
             ${vs.map(v => `<div class="vrow"><div><div class="vn">${VLABEL[v] || v}</div><div class="vp">${i ? (priceOf(setId, card.id, v) != null ? money(priceOf(setId, card.id, v)) : "No price") : "Loading price…"}</div></div>
               <div class="step"><button data-v="${v}" data-d="-1" aria-label="Remove one">−</button><span>${qty(card.id, v)}</span><button data-v="${v}" data-d="1" aria-label="Add one">+</button></div></div>
               ${qty(card.id, v) ? `<div class="trow"><span>For trade <span class="faint">(of your ${qty(card.id, v)})</span></span><div class="step sm"><button data-v="${v}" data-t="-1" aria-label="One less for trade">−</button><span>${col.cards[card.id]?.t?.[v] || 0}</span><button data-v="${v}" data-t="1" aria-label="One more for trade">+</button></div></div>` : ""}`).join("")}
           </div>
+          ${gradedHTML}
           <div style="margin-top:12px"><button class="btn small ${isWanted(card.id) ? "wanted" : ""}" data-want>${isWanted(card.id) ? "♥ On your wants list" : "♡ Add to wants"}</button></div>
           <p class="muted" style="margin-top:14px">Your copies are worth <b style="color:var(--good)">${money(mine)}</b></p>
           <p style="font-size:13px"><a href="https://www.cardmarket.com/en/Pokemon/Products/Search?searchString=${encodeURIComponent(card.name)}" target="_blank" rel="noopener">Look up on Cardmarket ↗</a></p>
@@ -1028,11 +1079,31 @@ async function openCard(card, setId, onChange){
   dlg.onclick = e => {
     if(e.target === dlg || e.target.closest("[data-x]")){ dlg.close(); return; }
     if(e.target.closest("[data-want]")){ setWant(card, setId, !isWanted(card.id)); render(); onChange && onChange(); return; }
+    if(e.target.closest("[data-gadd]")){ gform = {k:-1}; render(); return; }
+    if(e.target.closest("[data-gcancel]")){ gform = null; render(); return; }
+    const ge = e.target.closest("[data-gedit]"); if(ge){ gform = {k:+ge.dataset.gedit}; render(); return; }
+    const gd = e.target.closest("[data-gdel]");
+    if(gd){ const l = gradedList(card.id).slice(); const x = l[+gd.dataset.gdel]; if(!confirm(`Remove your ${gradeLabel(x)} copy?`)) return; l.splice(+gd.dataset.gdel, 1); saveGraded(card, setId, l); render(); onChange && onChange(); return; }
+    if(e.target.closest("[data-gsave]")){
+      const val = id => document.getElementById(id)?.value;
+      const amt = parseFloat(String(val("g_amt") || "").replace(",", "."));
+      const prev = gform.k >= 0 ? gradedList(card.id)[gform.k] : null;
+      const x = {c:val("g_c"), gr:val("g_gr"), v:val("g_v") || variantsOf(setId, card.id)[0], amt:amt > 0 ? amt : 0, cur:prev?.cur || col.settings.currency, cert:(val("g_cert") || "").trim().slice(0, 30)};
+      const l = gradedList(card.id).slice(); if(gform.k >= 0) l[gform.k] = x; else l.push(x);
+      saveGraded(card, setId, l); gform = null; render(); onChange && onChange();
+      toast(`Saved ${gradeLabel(x)}`); return;
+    }
     const t = e.target.closest("[data-t]");
     if(t){ setTrade(card.id, t.dataset.v, (col.cards[card.id]?.t?.[t.dataset.v] || 0) + (+t.dataset.t)); render(); onChange && onChange(); return; }
     const b = e.target.closest("[data-d]"); if(!b) return;
     setQty(card, setId, b.dataset.v, qty(card.id, b.dataset.v) + (+b.dataset.d));
     render(); onChange && onChange();
+  };
+  dlg.onchange = e => {   // keep the eBay link in step with the chosen grader/grade
+    if(!["g_c", "g_gr"].includes(e.target.id)) return;
+    const a = document.getElementById("g_sold"); if(!a) return;
+    const c = document.getElementById("g_c").value, gr = document.getElementById("g_gr").value;
+    a.href = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(`${card.name} ${card.localId} ${setMeta(setId)?.name || ""} ${c === "Other" ? "" : c} ${gr}`)}&LH_Sold=1&LH_Complete=1`;
   };
   if(!dlg.open) dlg.showModal();
   if(!info(setId, card.id)) await fillOwnPrices(setId);
@@ -1048,14 +1119,18 @@ async function viewCollection(){
   try{ await getSets(); }catch(e){}
   const bySet = {};
   Object.entries(col.cards).forEach(([id, e]) => (bySet[e.s] = bySet[e.s] || []).push([id, e]));
-  let total = 0, copies = 0, unpriced = 0;
+  let total = 0, copies = 0, unpriced = 0, graded = 0, gradedVal = 0;
   const top = [];
   const rows = Object.entries(bySet).map(([sid, list]) => {
     let val = 0;
-    list.forEach(([id, e]) => Object.entries(e.q).forEach(([v, n]) => {
-      copies += n; const p = priceOf(sid, id, v);
-      if(p == null) unpriced += n; else { val += p * n; const t = top.find(x => x.id === id); if(t) t.p += p * n; else top.push({id, e, sid, p:p * n}); }
-    }));
+    const addTop = (id, e, p) => { const t = top.find(x => x.id === id); if(t) t.p += p; else top.push({id, e, sid, p}); };
+    list.forEach(([id, e]) => {
+      Object.entries(e.q).forEach(([v, n]) => {
+        copies += n; const p = priceOf(sid, id, v);
+        if(p == null) unpriced += n; else { val += p * n; addTop(id, e, p * n); }
+      });
+      (e.g || []).forEach(x => { copies++; graded++; const p = gradedEur(x); if(p == null) unpriced++; else { val += p; gradedVal += p; addTop(id, e, p); } });
+    });
     total += val;
     const m = Object.assign({name:sid, logo:""}, setMeta(sid) || {}, {total:setTotal(sid)});
     return {sid, m, have:list.length, val};
@@ -1067,7 +1142,7 @@ async function viewCollection(){
     <div class="stats">
       <div class="stat panel hero"><div class="lb">Collection value</div><div class="vl" style="color:var(--good)">${money(total)}</div><div class="sub">${unpriced ? `${unpriced} copies have no price yet. Press Update prices.` : "Cardmarket trend prices"}</div></div>
       <div class="stat panel"><div class="lb">Unique cards</div><div class="vl">${uniq}</div></div>
-      <div class="stat panel"><div class="lb">Total copies</div><div class="vl">${copies}</div></div>
+      <div class="stat panel"><div class="lb">Total copies</div><div class="vl">${copies}</div>${graded ? `<div class="sub">incl. ${graded} graded, worth ${money(gradedVal)}</div>` : ""}</div>
       <div class="stat panel"><div class="lb">Sets started</div><div class="vl">${rows.length}</div></div>
     </div>
     <div class="toolbar"><button class="btn" id="upd">Update prices</button><span class="loadnote" id="ln"></span></div>

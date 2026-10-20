@@ -9,6 +9,7 @@ A free Pokémon TCG collection tracker. Track every set and subset card by card,
 - Subsets get their own tab: Radiant Collection, Trainer Gallery, Galarian Gallery, Shiny Vault, Classic Collection, the 30th Celebration Pikachu Collection.
 - Tap **+** / **−** on a card to add or remove a copy. Tap the picture for reverse holos and other versions.
 - Set value, master set value and the value of your own cards, from daily Cardmarket prices.
+- **Graded cards:** add PSA, BGS, CGC, TAG, ACE, SGC or PCA slabs with their grade, value and cert number. They count towards your set progress and collection value. There's a shortcut to eBay sold listings for checking values.
 - Prices in EUR, NOK, SEK, DKK, USD or GBP, converted with the European Central Bank's daily rates.
 - **Trading:** mark cards **for trade**, keep a **wants** list, and share your binder with friends as a link. Their app shows what you can swap, and what it's worth.
 - Sync with a private GitHub repository, so your collection is the same on every device. Connect your phone by scanning a QR code.
