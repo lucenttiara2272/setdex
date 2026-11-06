@@ -87,23 +87,24 @@ for(const j of jobs){
   const need = j.cards.filter(id => !j.out[id]?.pricing);
   const pid = PTCG[j.id];
   if(!need.length || !pid) continue;
-  const byNo = {};
+  const byNo = {}, byKey = {};   // by printed number, and by the API's own card id (106p, 106m …)
   for(let page = 1; page <= 5; page++){
     let r = null;
     for(let t = 0; t < 3 && !r; t++){
       try{
-        const res = await fetch(`${PTCG_API}?q=set.id:${encodeURIComponent(pid)}&pageSize=250&page=${page}&select=number,name,rarity,tcgplayer,cardmarket`, {headers});
+        const res = await fetch(`${PTCG_API}?q=set.id:${encodeURIComponent(pid)}&pageSize=250&page=${page}&select=id,number,name,rarity,tcgplayer,cardmarket`, {headers});
         if(res.ok) r = await res.json(); else if(res.status === 404) break; else await new Promise(ok => setTimeout(ok, 3000 * (t + 1)));
       }catch(e){ await new Promise(ok => setTimeout(ok, 3000)); }
     }
     asked++;
     if(!r || !Array.isArray(r.data)) break;
-    for(const pc of r.data) byNo[normNo(String(pc.number))] = pc;
+    for(const pc of r.data){ byNo[normNo(String(pc.number))] = pc; byKey[normNo(String(pc.id).slice(pid.length + 1))] = pc; }
     if(r.data.length < 250) break;
     await new Promise(ok => setTimeout(ok, 1200));   // be gentle with the free API
   }
   for(const id of need){
-    const pc = byNo[normNo(PTCG_NO[j.id]?.[j.local[id]] || j.local[id])]; if(!pc || !sameName(pc.name, j.names[id])) continue;
+    const key = normNo(PTCG_NO[j.id]?.[j.local[id]] || j.local[id]);
+    const pc = byKey[key] || byNo[key]; if(!pc || !sameName(pc.name, j.names[id])) continue;
     const add = fromPtcg(pc); if(!add.pricing.cardmarket && !add.pricing.tcgplayer) continue;
     const cur = j.out[id] || {};
     j.out[id] = {variants:{...add.variants, ...(cur.variants || {})}, ...(cur.rarity || add.rarity ? {rarity:cur.rarity || add.rarity} : {}), pricing:add.pricing, from:"ptcg"};

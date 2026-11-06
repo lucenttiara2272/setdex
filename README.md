@@ -86,7 +86,7 @@ Otherwise, do step 3 once on every phone and computer. The token is stored only 
 **Need an older version of your collection?** Open `collection.json` in `setdex-data` → **History**, download the version you want, then use **Settings → Restore from backup** in the app.
 
 ## Where the data comes from
-- Cards, pictures and prices: [TCGdex](https://tcgdex.dev). Missing pictures and prices fall back to the [Pokémon TCG API](https://pokemontcg.io) and [Scrydex](https://scrydex.com).
+- Cards, pictures and prices: [TCGdex](https://tcgdex.dev). Missing pictures and prices fall back to the free [Pokémon TCG API](https://pokemontcg.io). Only picture links that API gives out are used (its pictures are served by Scrydex); they're saved in the daily data copy.
 - Exchange rates: European Central Bank, via [Frankfurter](https://frankfurter.dev).
 
 Prices are estimates of the market value, not what a shop will pay.
@@ -95,7 +95,7 @@ Prices are estimates of the market value, not what a shop will pay.
 The set list, card lists, set logos and symbols are copied into [`data/`](data/) every day by the **Update card data** GitHub Action ([`scripts/build-data.mjs`](scripts/build-data.mjs)). The app loads them from this site first, so it's faster and works offline. Sets newer than the copy are still fetched from TCGdex. Card pictures and prices aren't copied; they're loaded live. To update right away, go to **Actions → Update card data → Run workflow**.
 
 ## Privacy
-SetDex has no ads, no analytics, no cookies and no accounts of its own, and the person who runs SetDex can't see your collection. It's stored in your browser and, if you turn on sync, in your own private GitHub repository. To show cards, the app loads data and pictures from GitHub Pages, TCGdex, the Pokémon TCG API / Scrydex and Frankfurter, and like any website they receive your IP address. A share link contains the name you chose and your trade and wants lists, so anyone with the link can see them.
+SetDex has no ads, no analytics, no cookies and no accounts of its own, and the person who runs SetDex can't see your collection. It's stored in your browser and, if you turn on sync, in your own private GitHub repository. To show cards, the app loads data and pictures from GitHub Pages, TCGdex, the Pokémon TCG API (pictures served by Scrydex) and Frankfurter, and like any website they receive your IP address. A share link contains the name you chose and your trade and wants lists, so anyone with the link can see them.
 
 ## Legal
 SetDex is a free, unofficial, fan-made tool. It isn't produced, endorsed, sponsored, supported or approved by Nintendo, The Pokémon Company, Creatures Inc. or GAME FREAK, and it isn't affiliated with them in any way.

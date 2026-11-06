@@ -34,6 +34,7 @@ jobs:
       - name: Copy sets, cards, logos and symbols
         env:
           TCGDEX_REPO: /tmp/tcgdex
+          POKEMONTCG_API_KEY: ${{ secrets.POKEMONTCG_API_KEY }}   # optional, free key from dev.pokemontcg.io
         run: node scripts/build-data.mjs
       - name: Save changes
         id: save

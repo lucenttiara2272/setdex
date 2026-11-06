@@ -436,10 +436,21 @@ async function ownData(file){
   return null;
 }
 let setsList = null, setsLoading = null;
+/* card id → [small, large] backup picture links the Pokémon TCG API gave out, filled as set data loads */
+const PIC = {};
+/* load the card lists of these sets so their backup pictures are known, then redraw pages that show cards from many sets */
+const picsLoaded = new Set();
+async function warmPics(ids){
+  const todo = [...new Set(ids.filter(Boolean))].filter(id => !picsLoaded.has(id) && !isPocket(id));
+  if(!todo.length) return;
+  todo.forEach(id => picsLoaded.add(id));
+  const before = Object.keys(PIC).length;
+  await Promise.all(todo.map(id => getSetRaw(id).catch(() => null)));
+  if(Object.keys(PIC).length > before && /^#\/?(collection|trade|binder|friend)/.test(location.hash) && !dlg.open) route();
+}
 /* set info from the data copy (or the API) for sets that aren't in the lists above */
 const fromOwn = s => ({id:s.id, name:s.name, logo:s.logo || "", symbol:s.symbol || "", logoFile:s.logoFile || "", symbolFile:s.symbolFile || "",
-  total:s.total || 0, official:s.official || 0, serie:s.serie || "", serieName:s.serieName || "", releaseDate:s.releaseDate || "", code:s.code || "",
-  ptcg:s.ptcg || "", scrydex:!!s.scrydex});
+  total:s.total || 0, official:s.official || 0, serie:s.serie || "", serieName:s.serieName || "", releaseDate:s.releaseDate || "", code:s.code || ""});
 function getSets(){
   if(setsList) return Promise.resolve(setsList);
   return setsLoading || (setsLoading = loadSets().finally(() => { setsLoading = null; }));
@@ -469,6 +480,8 @@ async function loadSets(){
   const known = new Set(mine.map(s => s.id));
   setsList = [...mine, ...(api || []).filter(s => !known.has(s.id))];   // sets newer than our copy come from the API
   learnSets();
+  // cards you own or want that TCGdex has no picture of: look up their backup pictures
+  setTimeout(() => warmPics([...Object.values(col.cards), ...Object.values(col.wants)].filter(e => !e.i).map(e => e.r || e.s)), 0);
   return setsList;
 }
 /* series, release date and set code of a set that's newer than our copy, from the TCGdex API */
@@ -540,7 +553,7 @@ async function getSetRaw(id){
   const map = s => ({
     id:s.id, name:s.name, logo:s.logo||"", symbol:s.symbol||"", serie:s.serie?.name||"", releaseDate:s.releaseDate||"",
     total:s.cardCount?.total||(s.cards||[]).length, official:s.cardCount?.official||0,
-    cards:(s.cards||[]).map(c => ({id:c.id, localId:String(c.localId), name:c.name, image:c.image||""}))
+    cards:(s.cards||[]).map(c => { if(c.pi) PIC[c.id] = c.pi; return {id:c.id, localId:String(c.localId), name:c.name, image:c.image||""}; })
   });
   const own = /^[\w.-]+$/.test(id) ? await ownData("sets/" + id + ".json") : null;
   const d = own && own.cards ? map(own) : await cached("setdex-set-" + id, "/sets/" + encodeURIComponent(id), map);
@@ -712,8 +725,6 @@ const sinfo = id => { const x = SETINFO[id];
   return {code:m?.code || "", date:m?.releaseDate || "", serieId:m?.serie || "", serie:m?.serieName || "New sets"}; };
 /* TCG Pocket (the phone game) sets: hide them, including future ones (ids like A1, A4a, B2, P-A) */
 const isPocket = id => sinfo(id).serieId === "tcgp" || (!SETINFO[id] && /^([A-Z]\d+[a-z]?|P-[A-Z])$/.test(id));
-/* Pokémon TCG API set id: the list above, or the one the data copy found for a new set */
-const ptcgId = id => PTCG[id] || setMeta(id)?.ptcg || "";
 /* came out in the last 30 days */
 const isNewSet = id => { const d = Date.parse(sinfo(id).date || ""); return d && Date.now() - d < 30 * DAY && Date.now() >= d - DAY; };
 /* <img> that tries each URL in turn, then shows a text placeholder */
@@ -752,25 +763,20 @@ function imgFail(el){
 function cardUrls(c, setId, q){
   const real = c.rs || setId, sid = sinfo(real).serieId;
   const alt = sid ? LANGS.map(l => `https://assets.tcgdex.net/${l}/${sid}/${real}/${encodeURIComponent(c.localId)}/${q || "low"}.webp`) : [];
-  const pid = ptcgId(real), num = PTCG_NO[real]?.[c.localId] || (/^\d+$/.test(c.localId) ? String(+c.localId) : c.localId);
-  const big = q === "high";
-  const ptcg = pid ? [`https://images.scrydex.com/pokemon/${pid}-${encodeURIComponent(num)}/${big ? "large" : "small"}`, `https://images.pokemontcg.io/${pid}/${encodeURIComponent(num)}${big ? "_hires" : ""}.png`] : [];
+  const pi = PIC[c.id];   // backup picture link from the Pokémon TCG API (see data copy)
+  const ptcg = pi ? [q === "high" ? pi[1] : pi[0]] : [];
   // TCGdex English first, then the Pokémon TCG API, then TCGdex in other languages
   return c.image ? [img(c.image, q), ...ptcg, ...alt.slice(1)] : [...(c.guess ? alt.slice(0, 1) : []), ...ptcg, ...alt.slice(1)];
 }
-/* set logos and symbols from the Pokémon TCG API (official images, made for apps) */
-const PTCG_SCRYDEX = new Set(["me2pt5","me3","me4","me5","me55","me55c"]);
-const ptcgArt = (setId, kind) => { const pid = ptcgId(setId); if(!pid) return "";
-  return PTCG_SCRYDEX.has(pid) || setMeta(setId)?.scrydex ? `https://images.scrydex.com/pokemon/${pid}-${kind}/${kind}` : `https://images.pokemontcg.io/${pid}/${kind}.png`; };
 function logoUrls(s){
   const sid = sinfo(s.id).serieId;
   const alt = sid ? LANGS.map(l => `https://assets.tcgdex.net/${l}/${sid}/${s.id}/logo.webp`) : [];
   const cover = sid ? ["en","fr"].map(l => `https://assets.tcgdex.net/${l}/${sid}/${s.id}/1/low.webp`) : [];
   // TCGdex logo, then the Pokémon TCG API logo, then other languages, then the first card as a cover
   const own = s.logoFile || setMeta(s.id)?.logoFile || "";
-  return [own, ...(s.logo ? [logo(s.logo)] : []), ptcgArt(s.id, "logo"), ...alt.slice(1), ...cover].filter(Boolean);
+  return [own, ...(s.logo ? [logo(s.logo)] : []), ...alt.slice(1), ...cover].filter(Boolean);
 }
-const symUrls = s => [s.symbolFile || setMeta(s.id)?.symbolFile || "", s.symbol ? s.symbol + ".webp" : "", ptcgArt(s.id, "symbol")].filter(Boolean);
+const symUrls = s => [s.symbolFile || setMeta(s.id)?.symbolFile || "", s.symbol ? s.symbol + ".webp" : ""].filter(Boolean);
 function markHTML(s, withYear){
   const i = sinfo(s.id), sym = symUrls(s);
   const date = i.date || s.releaseDate || "";
@@ -1296,7 +1302,7 @@ function viewSettings(){
       <p><b>Where the information comes from</b></p>
       <ul class="glist">
         <li>Card and set data: <a href="https://tcgdex.dev" target="_blank" rel="noopener">TCGdex</a>, used under the MIT license.</li>
-        <li>Card pictures, set logos and symbols: TCGdex, with the <a href="https://pokemontcg.io" target="_blank" rel="noopener">Pokémon TCG API</a> and <a href="https://scrydex.com" target="_blank" rel="noopener">Scrydex</a> as backup. They don't own the pictures either; they belong to the copyright holders above.</li>
+        <li>Card pictures, set logos and symbols: TCGdex, with the free <a href="https://pokemontcg.io" target="_blank" rel="noopener">Pokémon TCG API</a> as backup (its pictures are served by Scrydex). They don't own the pictures either; they belong to the copyright holders above.</li>
         <li>Prices: Cardmarket trend prices through TCGdex and the Pokémon TCG API (TCGplayer when Cardmarket has none). These are estimates, not offers or financial advice. Cardmarket and TCGplayer are trademarks of their owners, and SetDex isn't affiliated with them.</li>
         <li>Exchange rates: European Central Bank, through <a href="https://frankfurter.dev" target="_blank" rel="noopener">Frankfurter</a>.</li>
       </ul>
@@ -1446,6 +1452,7 @@ async function viewTrade(tab){
 
 async function viewBinder(b, key){
   try{ await getSets(); }catch(e){}
+  warmPics([...b.t, ...b.w].map(x => binderCard(x[0], x[1], "").rs));
   const saved = key && col.friends[key];
   const name = b.n || "Your friend";
   const draw = () => {

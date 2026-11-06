@@ -28,6 +28,8 @@ jobs:
         with:
           node-version: 20
       - name: Fetch today's prices
+        env:
+          POKEMONTCG_API_KEY: ${{ secrets.POKEMONTCG_API_KEY }}   # optional, free key from dev.pokemontcg.io
         run: node scripts/build-prices.mjs
       - name: Save changes
         id: save

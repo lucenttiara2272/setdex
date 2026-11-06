@@ -3,7 +3,8 @@
 //   data/sets/<id>.json     the card list of each set
 //   data/logos, data/symbols  set logos and symbols
 // Card data: TCGdex (MIT license, see data/LICENSE-TCGdex.txt).
-// Logos/symbols that TCGdex lacks come from the Pokémon TCG API.
+// Logos/symbols and card pictures that TCGdex lacks come from the free Pokémon TCG API (pokemontcg.io).
+// Only picture links the API itself gives out are used (saved as "pi" on each card), never guessed ones.
 // New sets need no code changes: their set code, series and Pokémon TCG API id are worked out here
 // and saved in sets.json, and the app reads them from there.
 // Card pictures and prices are NOT copied; the app loads those live.
@@ -17,11 +18,10 @@ const OUT = path.join(ROOT, "data");
 // the Pokémon TCG API set ids live in index.html, so there is one list to keep up to date
 const html = await fs.readFile(path.join(ROOT, "index.html"), "utf8");
 const PTCG = JSON.parse(html.match(/const PTCG = (\{.*?\});/)[1]);
-const SCRYDEX = new Set(JSON.parse(html.match(/const PTCG_SCRYDEX = new Set\((\[.*?\])\);/)[1]));
-const ptcgArt = (id, kind) => { const pid = PTCG[id] || autoPtcg[id]?.id; if(!pid) return null;
-  const own = autoPtcg[id]?.images?.[kind]; if(own) return own;
-  return SCRYDEX.has(pid) ? `https://images.scrydex.com/pokemon/${pid}-${kind}/${kind}` : `https://images.pokemontcg.io/${pid}/${kind}.png`; };
+const PTCG_NO = JSON.parse((html.match(/const PTCG_NO = (\{.*?\});/) || [, "{}"])[1]);
 const autoPtcg = {};   // TCGdex set id → Pokémon TCG API set, for sets not in index.html's PTCG list
+const ptcgById = new Map();   // Pokémon TCG API set id → set (with its logo and symbol links)
+const ptcgArt = (id, kind) => ptcgById.get(PTCG[id] || autoPtcg[id]?.id)?.images?.[kind] || null;
 
 async function get(url, tries = 4){
   for(let i = 0; i < tries; i++){
@@ -54,6 +54,10 @@ async function image(urls, base){
     for(const e of ["webp", "png", "jpg", "svg"]) if(e !== ext) await fs.rm(`${base}.${e}`, {force:true});
     await writeIfChanged(`${base}.${ext}`, buf);
     return path.relative(ROOT, `${base}.${ext}`).split(path.sep).join("/");
+  }
+  // nothing answered today: keep the copy we already have
+  for(const e of ["webp", "png", "jpg", "svg"]){
+    try{ await fs.access(`${base}.${e}`); return path.relative(ROOT, `${base}.${e}`).split(path.sep).join("/"); }catch(err){}
   }
   return "";
 }
@@ -108,7 +112,54 @@ try{
     ptcgSets.push(...d.data); if(d.data.length < 250) break;
   }
 }catch(e){ console.log("Pokémon TCG API set list not reachable, skipping: " + e.message); }
+ptcgSets.forEach(p => ptcgById.set(p.id, p));
 const usedPtcg = new Set(Object.values(PTCG));
+
+// ---- backup card pictures from the Pokémon TCG API, for cards TCGdex has no picture of ----
+const PTCG_HEADERS = {"User-Agent":"SetDex data mirror (github.com/lucenttiara2272/setdex)", ...(process.env.POKEMONTCG_API_KEY ? {"X-Api-Key":process.env.POKEMONTCG_API_KEY} : {})};
+let ptcgQueue = Promise.resolve();   // one request at a time, gently
+function ptcgCards(pid){
+  const job = ptcgQueue.then(async () => {
+    const all = [];
+    for(let page = 1; page <= 5; page++){
+      let d = null;
+      for(let t = 0; t < 3 && !d; t++){
+        try{
+          const r = await fetch(`https://api.pokemontcg.io/v2/cards?q=set.id:${encodeURIComponent(pid)}&pageSize=250&page=${page}&select=id,number,name,images`, {headers:PTCG_HEADERS});
+          if(r.ok) d = await r.json(); else if(r.status === 404) return all; else await new Promise(ok => setTimeout(ok, 3000 * (t + 1)));
+        }catch(e){ await new Promise(ok => setTimeout(ok, 3000)); }
+      }
+      if(!d || !Array.isArray(d.data)) return null;   // API down: keep the links we had
+      all.push(...d.data);
+      await new Promise(ok => setTimeout(ok, 400));
+      if(d.data.length < 250) break;
+    }
+    return all;
+  });
+  ptcgQueue = job.catch(() => null);
+  return job;
+}
+const normNo = l => /^\d+$/.test(l) ? String(+l) : String(l).toUpperCase();
+const sameName = (a, b) => { const x = norm(a), y = norm(b); return !!x && !!y && (x.startsWith(y.slice(0, 5)) || y.startsWith(x.slice(0, 5))); };
+/* give each card without a TCGdex picture the API's own picture links: [small, large] */
+function addPictures(setId, pid, cards, pcs){
+  const byKey = new Map(), byNo = new Map(), byName = new Map();
+  for(const p of pcs){
+    if(!p.images?.small) continue;
+    byKey.set(normNo(p.id.slice(pid.length + 1)), p);
+    const n = normNo(p.number); byNo.set(n, byNo.has(n) ? null : p);   // null = number used twice, don't guess
+    const k = norm(p.name); byName.set(k, byName.has(k) ? null : p);
+  }
+  let n = 0;
+  for(const c of cards){
+    if(c.image) continue;
+    const key = normNo(PTCG_NO[setId]?.[c.localId] || c.localId);
+    let p = byKey.get(key) || byNo.get(key);
+    if(!p || !sameName(p.name, c.name)) p = byName.get(norm(c.name)) || null;
+    if(p){ c.pi = [p.images.small, p.images.large || p.images.small]; n++; }
+  }
+  return n;
+}
 function findPtcg(d){
   if(PTCG[d.id] || !ptcgSets.length) return null;
   const free = ptcgSets.filter(p => !usedPtcg.has(p.id));
@@ -125,9 +176,19 @@ const sets = (await pool(list, 6, async s => {
   if(!d || d.serie?.id === "tcgp") return null;   // TCG Pocket is a phone game, not physical cards
   const pt = findPtcg(d); if(pt) autoPtcg[d.id] = pt;
   const cards = (d.cards || []).map(c => ({id:c.id, localId:String(c.localId), name:c.name, ...(c.image ? {image:c.image} : {})}));
+  const pidEarly = PTCG[d.id] || pt?.id;
   const have = new Set(cards.map(c => c.localId));
   const extra = (repoCards[d.id] || []).filter(c => !have.has(c.localId)).sort(byNumber).map(c => ({id:`${d.id}-${c.localId}`, localId:c.localId, name:c.name}));
   if(extra.length){ cards.push(...extra); console.log(`${d.id}: added ${extra.length} cards from the source files (${extra.map(c => c.localId).join(", ")})`); }
+  if(pidEarly && cards.some(c => !c.image)){
+    const pcs = await ptcgCards(pidEarly);
+    if(pcs){ const n = addPictures(d.id, pidEarly, cards, pcs); if(n) console.log(`${d.id}: ${n} backup pictures from the Pokémon TCG API`); }
+    else {   // API didn't answer: keep yesterday's links
+      const prev = await fs.readFile(path.join(OUT, "sets", `${d.id}.json`), "utf8").then(JSON.parse).catch(() => null);
+      const old = new Map((prev?.cards || []).filter(c => c.pi).map(c => [c.id, c.pi]));
+      cards.forEach(c => { if(!c.image && old.has(c.id)) c.pi = old.get(c.id); });
+    }
+  }
   const set = {id:d.id, name:d.name, logo:d.logo || "", symbol:d.symbol || "", serie:{id:d.serie?.id || "", name:d.serie?.name || ""},
     releaseDate:d.releaseDate || "", cardCount:{total:Math.max(d.cardCount?.total ?? 0, cards.length), official:d.cardCount?.official ?? 0}, cards};
   if(await writeIfChanged(path.join(OUT, "sets", `${d.id}.json`), JSON.stringify(set))) changed++;
@@ -137,7 +198,7 @@ const sets = (await pool(list, 6, async s => {
   const pid = PTCG[d.id] || pt?.id || "";
   return {id:d.id, name:d.name, logo:d.logo || "", symbol:d.symbol || "", logoFile, symbolFile, total:set.cardCount.total, official:set.cardCount.official,
     serie:set.serie.id, serieName:set.serie.name, releaseDate:set.releaseDate, code,
-    ...(pid ? {ptcg:pid} : {}), ...(pid && (SCRYDEX.has(pid) || /scrydex/.test(pt?.images?.logo || "")) ? {scrydex:true} : {})};
+    ...(pid ? {ptcg:pid} : {})};
 })).filter(Boolean);
 
 // keep the database's own order (oldest first), like the API
