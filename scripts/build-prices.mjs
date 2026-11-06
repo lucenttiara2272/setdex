@@ -38,7 +38,7 @@ const jobs = [];
 for(const f of files){
   const set = JSON.parse(await fs.readFile(path.join(SETS, f), "utf8"));
   const prev = await fs.readFile(path.join(OUT, f), "utf8").then(JSON.parse).catch(() => ({cards:{}}));
-  jobs.push({id:set.id, cards:set.cards.map(c => c.id), local:Object.fromEntries(set.cards.map(c => [c.id, String(c.localId)])), prev:prev.cards || {}, out:{}});
+  jobs.push({id:set.id, cards:set.cards.map(c => c.id), local:Object.fromEntries(set.cards.map(c => [c.id, String(c.localId)])), names:Object.fromEntries(set.cards.map(c => [c.id, c.name])), prev:prev.cards || {}, out:{}});
 }
 const all = jobs.flatMap(j => j.cards.map(id => [j, id]));
 let i = 0, ok = 0, missing = 0, failed = 0;
@@ -62,6 +62,10 @@ try{ for(const x of JSON.parse(await fs.readFile(path.join(ROOT, "data", "sets.j
 const PTCG_API = process.env.PTCG_API || "https://api.pokemontcg.io/v2/cards";
 const headers = {"User-Agent":"SetDex price copy (github.com/lucenttiara2272/setdex)", ...(process.env.POKEMONTCG_API_KEY ? {"X-Api-Key":process.env.POKEMONTCG_API_KEY} : {})};
 const normNo = l => /^\d+$/.test(l) ? String(+l) : l.toUpperCase();
+// Classic Collections use the original card numbers there (see PTCG_NO in index.html)
+const PTCG_NO = JSON.parse((html.match(/const PTCG_NO = (\{.*?\});/) || [, "{}"])[1]);
+// only take a price when the card names agree, so a numbering mix-up can never give a card another card's price
+const sameName = (a, b) => { const k = t => String(t || "").toLowerCase().normalize("NFD").replace(/[^a-z0-9]/g, ""); const x = k(a), y = k(b); return !x || !y || x.startsWith(y.slice(0, 5)) || y.startsWith(x.slice(0, 5)); };
 function fromPtcg(pc){
   const out = {variants:{}, pricing:{}};
   const cm = pc.cardmarket?.prices || {}, tp = pc.tcgplayer?.prices || {};
@@ -88,7 +92,7 @@ for(const j of jobs){
     let r = null;
     for(let t = 0; t < 3 && !r; t++){
       try{
-        const res = await fetch(`${PTCG_API}?q=set.id:${encodeURIComponent(pid)}&pageSize=250&page=${page}&select=number,rarity,tcgplayer,cardmarket`, {headers});
+        const res = await fetch(`${PTCG_API}?q=set.id:${encodeURIComponent(pid)}&pageSize=250&page=${page}&select=number,name,rarity,tcgplayer,cardmarket`, {headers});
         if(res.ok) r = await res.json(); else if(res.status === 404) break; else await new Promise(ok => setTimeout(ok, 3000 * (t + 1)));
       }catch(e){ await new Promise(ok => setTimeout(ok, 3000)); }
     }
@@ -99,7 +103,7 @@ for(const j of jobs){
     await new Promise(ok => setTimeout(ok, 1200));   // be gentle with the free API
   }
   for(const id of need){
-    const pc = byNo[normNo(j.local[id])]; if(!pc) continue;
+    const pc = byNo[normNo(PTCG_NO[j.id]?.[j.local[id]] || j.local[id])]; if(!pc || !sameName(pc.name, j.names[id])) continue;
     const add = fromPtcg(pc); if(!add.pricing.cardmarket && !add.pricing.tcgplayer) continue;
     const cur = j.out[id] || {};
     j.out[id] = {variants:{...add.variants, ...(cur.variants || {})}, ...(cur.rarity || add.rarity ? {rarity:cur.rarity || add.rarity} : {}), pricing:add.pricing, from:"ptcg"};
