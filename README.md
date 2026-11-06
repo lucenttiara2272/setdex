@@ -86,7 +86,7 @@ Otherwise, do step 3 once on every phone and computer. The token is stored only 
 **Need an older version of your collection?** Open `collection.json` in `setdex-data` → **History**, download the version you want, then use **Settings → Restore from backup** in the app.
 
 ## Where the data comes from
-- Cards, pictures and prices: [TCGdex](https://tcgdex.dev). Missing pictures fall back to the [Pokémon TCG API](https://pokemontcg.io).
+- Cards, pictures and prices: [TCGdex](https://tcgdex.dev). Missing pictures and prices fall back to the [Pokémon TCG API](https://pokemontcg.io) and [Scrydex](https://scrydex.com).
 - Exchange rates: European Central Bank, via [Frankfurter](https://frankfurter.dev).
 
 Prices are estimates of the market value, not what a shop will pay.
@@ -94,11 +94,18 @@ Prices are estimates of the market value, not what a shop will pay.
 ## Card data copy
 The set list, card lists, set logos and symbols are copied into [`data/`](data/) every day by the **Update card data** GitHub Action ([`scripts/build-data.mjs`](scripts/build-data.mjs)). The app loads them from this site first, so it's faster and works offline. Sets newer than the copy are still fetched from TCGdex. Card pictures and prices aren't copied; they're loaded live. To update right away, go to **Actions → Update card data → Run workflow**.
 
+## Privacy
+SetDex has no ads, no analytics, no cookies and no accounts of its own, and the person who runs SetDex can't see your collection. It's stored in your browser and, if you turn on sync, in your own private GitHub repository. To show cards, the app loads data and pictures from GitHub Pages, TCGdex, the Pokémon TCG API / Scrydex and Frankfurter, and like any website they receive your IP address. A share link contains the name you chose and your trade and wants lists, so anyone with the link can see them.
+
 ## Legal
 SetDex is a free, unofficial, fan-made tool. It isn't produced, endorsed, sponsored, supported or approved by Nintendo, The Pokémon Company, Creatures Inc. or GAME FREAK, and it isn't affiliated with them in any way.
 
 Pokémon, the Pokémon Trading Card Game, all Pokémon and character names, set names, set logos and symbols, card names, card text and card artwork are trademarks and/or copyrights of their owners (© Nintendo, Creatures Inc., GAME FREAK inc., The Pokémon Company). They're shown only to identify cards and sets, and no ownership of them is claimed.
 
 Card data comes from [TCGdex](https://github.com/tcgdex/cards-database) and is used under the MIT license (see [`data/LICENSE-TCGdex.txt`](data/LICENSE-TCGdex.txt)).
+
+Prices are estimates from Cardmarket and TCGplayer data, not offers or financial advice. Cardmarket and TCGplayer are trademarks of their owners, and SetDex isn't affiliated with them.
+
+SetDex's own code is under the [MIT license](LICENSE). That license doesn't cover any Pokémon content. Other parts keep their own licenses: [qrcode.js](https://github.com/kazuhikoarase/qrcode-generator) by Kazuhiko Arase (MIT) and the [Outfit](https://github.com/Outfitio/Outfit-Fonts) font (SIL Open Font License 1.1, see [`fonts/OFL.txt`](fonts/OFL.txt)).
 
 **Rights holders:** if you'd like any material removed, please [open an issue](https://github.com/lucenttiara2272/setdex/issues) and it will be taken down promptly.
