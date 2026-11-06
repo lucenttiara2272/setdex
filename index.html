@@ -148,6 +148,7 @@ h2{font-size:17px;margin:26px 0 10px;letter-spacing:-.01em}
 .sets-group::after{content:"";flex:1;height:1px;background:var(--line)}
 .mark{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink-3);min-height:20px}
 .mark .sym{width:20px;height:20px;object-fit:contain}
+.newb{display:inline-block;margin-left:6px;font-size:10px;font-weight:800;letter-spacing:.06em;padding:1px 6px;border-radius:5px;background:var(--accent,#e3350d);color:#fff;vertical-align:2px}
 .code{font-weight:700;font-size:11px;letter-spacing:.04em;padding:2px 6px;border-radius:5px;background:var(--surface-2);color:var(--ink);border:1px solid var(--line)}
 .mark .yr{margin-left:auto}
 .shead .logo:empty{display:none}
@@ -423,7 +424,7 @@ async function cached(key, path, map){
     return d;
   }catch(e){ if(c) return c.d; throw e; }
 }
-/* SetDex's own copy of the card database (data/, updated weekly by GitHub Actions).
+/* SetDex's own copy of the card database (data/, updated every day by GitHub Actions).
    It's used first; the TCGdex API fills in anything newer, and is used by the local file version. */
 const OWN_DATA = location.protocol !== "file:";
 async function ownData(file){
@@ -431,30 +432,82 @@ async function ownData(file){
   try{ const r = await fetch("data/" + file, {cache:"no-cache"}); if(r.ok) return await r.json(); }catch(e){}
   return null;
 }
-let setsList = null;
-async function getSets(){
-  if(setsList) return setsList;
+let setsList = null, setsLoading = null;
+/* set info from the data copy (or the API) for sets that aren't in the lists above */
+const fromOwn = s => ({id:s.id, name:s.name, logo:s.logo || "", symbol:s.symbol || "", logoFile:s.logoFile || "", symbolFile:s.symbolFile || "",
+  total:s.total || 0, official:s.official || 0, serie:s.serie || "", serieName:s.serieName || "", releaseDate:s.releaseDate || "", code:s.code || "",
+  ptcg:s.ptcg || "", scrydex:!!s.scrydex});
+function getSets(){
+  if(setsList) return Promise.resolve(setsList);
+  return setsLoading || (setsLoading = loadSets().finally(() => { setsLoading = null; }));
+}
+async function loadSets(){
   const apiList = () => cached("setdex-sets", "/sets", d => d.map(s => ({id:s.id, name:s.name, logo:s.logo||"", symbol:s.symbol||"", total:s.cardCount?.total||0, official:s.cardCount?.official||0}))).catch(e => null);
   const own = await ownData("sets.json");
   let api = null;
   if(own){
     // our copy is enough to show the page; sets newer than it are added in the background
-    apiList().then(list => {
+    apiList().then(async list => {
       if(!list || !setsList) return;
       const known = new Set(setsList.map(s => s.id));
-      const extra = list.filter(s => !known.has(s.id));
-      if(extra.length){ setsList.push(...extra); const h = location.hash.replace(/^#\/?/, ""); if(h === "" || h === "sets") route(); }
+      const extra = list.filter(s => !known.has(s.id) && !isPocket(s.id));
+      if(!extra.length) return;
+      await Promise.all(extra.map(fillSetInfo));
+      setsList.push(...extra.filter(s => s.serie !== "tcgp"));
+      learnSets();
+      const h = location.hash.replace(/^#\/?/, ""); if(h === "" || h === "sets") route();
     });
-  }else api = await apiList();
+  }else{
+    api = await apiList();
+    if(api) await Promise.all(api.filter(s => !SETINFO[s.id] && !isPocket(s.id)).map(fillSetInfo));
+  }
   if(!own && !api) throw new Error("no set list");
-  const mine = own ? own.sets.map(s => ({id:s.id, name:s.name, logo:s.logo || "", symbol:s.symbol || "", logoFile:s.logoFile || "", symbolFile:s.symbolFile || "", total:s.total || 0, official:s.official || 0})) : [];
+  const mine = own ? own.sets.map(fromOwn) : [];
   const known = new Set(mine.map(s => s.id));
   setsList = [...mine, ...(api || []).filter(s => !known.has(s.id))];   // sets newer than our copy come from the API
+  learnSets();
   return setsList;
+}
+/* series, release date and set code of a set that's newer than our copy, from the TCGdex API */
+async function fillSetInfo(s){
+  try{
+    const d = await cached("setdex-setinfo-" + s.id, "/sets/" + encodeURIComponent(s.id), d => ({serie:d.serie?.id || "", serieName:d.serie?.name || "",
+      releaseDate:d.releaseDate || "", code:d.abbreviation?.official || d.abbreviations?.official || ""}));
+    Object.assign(s, d);
+  }catch(e){}
+}
+/* New sets work with no code changes:
+   - a set called "<main set id>" + a short ending (30th → 30th-c, swsh9 → swsh9tg) that came out the same day is a subset of that set
+   - sets that appeared since the last visit are announced */
+function learnSets(){
+  const byId = new Map(setsList.map(s => [s.id, s]));
+  setsList.forEach(s => {
+    if(SETINFO[s.id] || SUBSETS[s.id] || REDIRECT[s.id]) return;
+    const parent = setsList.filter(p => p.id !== s.id && !SUBSETS[p.id] && s.id.startsWith(p.id) && /^-?[a-z]{1,3}$/.test(s.id.slice(p.id.length))
+      && (!s.releaseDate || !p.releaseDate || s.releaseDate === p.releaseDate)).sort((a, b) => b.id.length - a.id.length)[0];
+    if(!parent) return;
+    SUBSETS[s.id] = parent.id;
+    (CHILDREN[parent.id] = CHILDREN[parent.id] || []).push(s.id);
+    delete setMem[parent.id];
+    // cards added before we knew it was a subset: file them under the main set
+    let moved = false;
+    [col.cards, col.wants].forEach(list => Object.values(list).forEach(e => { if(e.s === s.id){ e.r = s.id; e.s = parent.id; e.u = Date.now(); moved = true; } }));
+    if(moved) saveCol();
+  });
+  // tell about sets that are new since last time (not on the very first visit)
+  const mainIds = setsList.filter(s => !isPocket(s.id) && !SUBSETS[s.id] && !REDIRECT[s.id] && s.total > 0).map(s => s.id);
+  const seen = lsGet("setdex-seen-sets", null);
+  if(seen){
+    const fresh = mainIds.filter(id => !seen.includes(id));
+    if(fresh.length) setTimeout(() => toast(fresh.length === 1 ? `New set added: ${byId.get(fresh[0]).name}` : fresh.length <= 3 ? `New sets added: ${fresh.map(id => byId.get(id).name).join(", ")}` : `${fresh.length} new sets added`), 600);
+  }
+  if(!seen || mainIds.some(id => !seen.includes(id))) lsSet("setdex-seen-sets", [...new Set([...(seen || []), ...mainIds])]);
 }
 const setMeta = id => (setsList || []).find(s => s.id === id);
 const setMem = {};
 async function getSet(id){
+  if(setMem[id]) return setMem[id];
+  await getSets().catch(() => null);   // so subsets of new sets are known
   if(setMem[id]) return setMem[id];
   const base = await getSetRaw(id);
   const parts = await Promise.all((CHILDREN[id] || []).map(c => getSetRaw(c).catch(() => null)));
@@ -650,9 +703,16 @@ function money(eur){
 const pct = (a, b) => b ? Math.floor(a / b * 1000) / 10 : 0;
 const img = (base, q) => base ? `${base}/${q || "low"}.webp` : "";
 const logo = u => u ? u + ".webp" : "";
-const sinfo = id => { const x = SETINFO[id]; return {code:x?.[0] || "", date:x?.[1] || "", serieId:x?.[2] || "", serie:x?.[3] || "New sets"}; };
+const sinfo = id => { const x = SETINFO[id];
+  if(x) return {code:x[0] || "", date:x[1] || "", serieId:x[2] || "", serie:x[3] || "New sets"};
+  const m = setMeta(id);   // new sets: from the data copy / API
+  return {code:m?.code || "", date:m?.releaseDate || "", serieId:m?.serie || "", serie:m?.serieName || "New sets"}; };
 /* TCG Pocket (the phone game) sets: hide them, including future ones (ids like A1, A4a, B2, P-A) */
 const isPocket = id => sinfo(id).serieId === "tcgp" || (!SETINFO[id] && /^([A-Z]\d+[a-z]?|P-[A-Z])$/.test(id));
+/* Pokémon TCG API set id: the list above, or the one the data copy found for a new set */
+const ptcgId = id => PTCG[id] || setMeta(id)?.ptcg || "";
+/* came out in the last 30 days */
+const isNewSet = id => { const d = Date.parse(sinfo(id).date || ""); return d && Date.now() - d < 30 * DAY && Date.now() >= d - DAY; };
 /* <img> that tries each URL in turn, then shows a text placeholder */
 function imgTag(urls, alt, ph, lazy){
   urls = urls.filter(Boolean);
@@ -689,7 +749,7 @@ function imgFail(el){
 function cardUrls(c, setId, q){
   const real = c.rs || setId, sid = sinfo(real).serieId;
   const alt = sid ? LANGS.map(l => `https://assets.tcgdex.net/${l}/${sid}/${real}/${encodeURIComponent(c.localId)}/${q || "low"}.webp`) : [];
-  const pid = PTCG[real], num = /^\d+$/.test(c.localId) ? String(+c.localId) : c.localId;
+  const pid = ptcgId(real), num = /^\d+$/.test(c.localId) ? String(+c.localId) : c.localId;
   const big = q === "high";
   const ptcg = pid ? [`https://images.scrydex.com/pokemon/${pid}-${encodeURIComponent(num)}/${big ? "large" : "small"}`, `https://images.pokemontcg.io/${pid}/${encodeURIComponent(num)}${big ? "_hires" : ""}.png`] : [];
   // TCGdex English first, then the Pokémon TCG API, then TCGdex in other languages
@@ -697,8 +757,8 @@ function cardUrls(c, setId, q){
 }
 /* set logos and symbols from the Pokémon TCG API (official images, made for apps) */
 const PTCG_SCRYDEX = new Set(["me2pt5","me3","me4","me5","me55","me55c"]);
-const ptcgArt = (setId, kind) => { const pid = PTCG[setId]; if(!pid) return "";
-  return PTCG_SCRYDEX.has(pid) ? `https://images.scrydex.com/pokemon/${pid}-${kind}/${kind}` : `https://images.pokemontcg.io/${pid}/${kind}.png`; };
+const ptcgArt = (setId, kind) => { const pid = ptcgId(setId); if(!pid) return "";
+  return PTCG_SCRYDEX.has(pid) || setMeta(setId)?.scrydex ? `https://images.scrydex.com/pokemon/${pid}-${kind}/${kind}` : `https://images.pokemontcg.io/${pid}/${kind}.png`; };
 function logoUrls(s){
   const sid = sinfo(s.id).serieId;
   const alt = sid ? LANGS.map(l => `https://assets.tcgdex.net/${l}/${sid}/${s.id}/logo.webp`) : [];
@@ -828,7 +888,7 @@ async function viewSets(){
       const have = counts[s.id] || 0, tot = setTotal(s.id) || s.total || 0, p = pct(have, tot);
       return `<a class="setc panel" href="#/set/${encodeURIComponent(s.id)}">
         <div class="logo">${imgTag(logoUrls(s), s.name, `<div class="ph" data-cover="${esc(s.id)}">${esc(sinfo(s.id).code || s.name)}</div>`, true)}</div>
-        <div class="nm">${esc(s.name)}${subsOf(s.id).map(c => `<div class="incl" role="link" onclick="event.preventDefault();location.hash='#/set/${esc(s.id)}/${esc(c.key)}'">+ ${esc(c.name.replace(s.name, "").trim() || c.name)} <span class="faint">${subCounts[s.id + "/" + c.key] || 0}/${c.total}</span></div>`).join("")}</div>
+        <div class="nm">${esc(s.name)}${isNewSet(s.id) ? '<span class="newb">NEW</span>' : ""}${subsOf(s.id).map(c => `<div class="incl" role="link" onclick="event.preventDefault();location.hash='#/set/${esc(s.id)}/${esc(c.key)}'">+ ${esc(c.name.replace(s.name, "").trim() || c.name)} <span class="faint">${subCounts[s.id + "/" + c.key] || 0}/${c.total}</span></div>`).join("")}</div>
         ${markHTML(s, true)}
         <div class="bar ${have && have>=tot ? "done":""}"><i style="width:${p}%"></i></div>
         <div class="ct"><span>${have} / ${tot}</span><span>${have ? p + "%" : ""}</span></div>
@@ -842,6 +902,7 @@ async function viewSets(){
 let cardFilter = "all", cardSort = "num";
 let current = null; // {set}
 async function viewSet(id, part){
+  await getSets().catch(() => null);
   if(REDIRECT[id]){ location.replace("#/set/" + REDIRECT[id].map(encodeURIComponent).join("/")); return; }
   if(SUBSETS[id]){ location.replace("#/set/" + encodeURIComponent(SUBSETS[id]) + "/" + encodeURIComponent(id)); return; }
   main.innerHTML = loading("Loading set…");
@@ -1242,7 +1303,7 @@ function viewSettings(){
     </div>
     <h2>Price data</h2>
     <div class="panel set-form">
-      <p class="muted" style="margin:0">Card data, pictures and prices come from the free <a href="https://tcgdex.dev" target="_blank" rel="noopener">TCGdex</a> database. The set list and card lists are a copy SetDex keeps itself and updates every week. Prices are Cardmarket trend prices in euro and update once a day. Other currencies are converted with the exchange rate above. Values are estimates, not what a shop will pay.</p>
+      <p class="muted" style="margin:0">Card data, pictures and prices come from the free <a href="https://tcgdex.dev" target="_blank" rel="noopener">TCGdex</a> database. The set list and card lists are a copy SetDex keeps itself and updates every day, so new sets show up by themselves. Prices are Cardmarket trend prices in euro and update once a day. Other currencies are converted with the exchange rate above. Values are estimates, not what a shop will pay.</p>
       <div><button class="btn" id="clr">Clear saved card data</button></div>
     </div>`;
   drawSyncInfo();
@@ -1683,6 +1744,7 @@ function route(){
   else viewSets();
 }
 window.addEventListener("hashchange", route);
+getSets().catch(() => {});
 route();
 if(sync){ setSync("busy"); syncNow(); }
 /* fetch exchange rates in the background; redraw once if this is the first time */

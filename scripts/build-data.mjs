@@ -4,6 +4,8 @@
 //   data/logos, data/symbols  set logos and symbols
 // Card data: TCGdex (MIT license, see data/LICENSE-TCGdex.txt).
 // Logos/symbols that TCGdex lacks come from the Pokémon TCG API.
+// New sets need no code changes: their set code, series and Pokémon TCG API id are worked out here
+// and saved in sets.json, and the app reads them from there.
 // Card pictures and prices are NOT copied; the app loads those live.
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -16,8 +18,10 @@ const OUT = path.join(ROOT, "data");
 const html = await fs.readFile(path.join(ROOT, "index.html"), "utf8");
 const PTCG = JSON.parse(html.match(/const PTCG = (\{.*?\});/)[1]);
 const SCRYDEX = new Set(JSON.parse(html.match(/const PTCG_SCRYDEX = new Set\((\[.*?\])\);/)[1]));
-const ptcgArt = (id, kind) => { const pid = PTCG[id]; if(!pid) return null;
+const ptcgArt = (id, kind) => { const pid = PTCG[id] || autoPtcg[id]?.id; if(!pid) return null;
+  const own = autoPtcg[id]?.images?.[kind]; if(own) return own;
   return SCRYDEX.has(pid) ? `https://images.scrydex.com/pokemon/${pid}-${kind}/${kind}` : `https://images.pokemontcg.io/${pid}/${kind}.png`; };
+const autoPtcg = {};   // TCGdex set id → Pokémon TCG API set, for sets not in index.html's PTCG list
 
 async function get(url, tries = 4){
   for(let i = 0; i < tries; i++){
@@ -61,7 +65,7 @@ async function pool(items, n, fn){
 
 // TCGdex's source files (cloned by the workflow) are sometimes ahead of its live API,
 // e.g. the RGB Mews in 30th Celebration. Cards found there but not in the API are added.
-const repoCards = {};
+const repoCards = {}, repoCode = {};
 if(process.env.TCGDEX_REPO){
   const base = path.join(process.env.TCGDEX_REPO, "data");
   for(const serie of await fs.readdir(base, {withFileTypes:true})){
@@ -72,6 +76,8 @@ if(process.env.TCGDEX_REPO){
       const id = (src.match(/\bid:\s*["']([^"']+)["']/) || [])[1];
       const dir = path.join(base, serie.name, f.slice(0, -3));
       if(!id) continue;
+      const code = (src.match(/abbreviations\s*:\s*\{[^}]*?\bofficial\s*:\s*["']([^"']+)["']/s) || [])[1];
+      if(code) repoCode[id] = code;
       const files = await fs.readdir(dir).catch(() => []);
       repoCards[id] = [];
       for(const cf of files){
@@ -88,10 +94,36 @@ const byNumber = (a, b) => (parseInt(a.localId, 10) || 1e9) - (parseInt(b.localI
 
 const list = await getJSON(API + "/sets");
 if(!Array.isArray(list) || list.length < 100) throw new Error("Set list looks wrong, stopping so nothing gets deleted");
+
+// Find the Pokémon TCG API set for new sets (by name, or by release date when only one set came out that day),
+// so they get its card pictures, logos and prices as backup, like the sets listed in index.html.
+const norm = t => String(t || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/&/g, "and").replace(/[^a-z0-9]/g, "");
+const ptcgSets = [];
+try{
+  const headers = process.env.POKEMONTCG_API_KEY ? {"X-Api-Key":process.env.POKEMONTCG_API_KEY} : {};
+  for(let page = 1; page <= 4; page++){
+    const r = await fetch(`https://api.pokemontcg.io/v2/sets?pageSize=250&page=${page}&select=id,name,series,releaseDate,images`, {headers:{"User-Agent":"SetDex data mirror (github.com/lucenttiara2272/setdex)", ...headers}});
+    if(!r.ok) break;
+    const d = await r.json(); if(!Array.isArray(d.data)) break;
+    ptcgSets.push(...d.data); if(d.data.length < 250) break;
+  }
+}catch(e){ console.log("Pokémon TCG API set list not reachable, skipping: " + e.message); }
+const usedPtcg = new Set(Object.values(PTCG));
+function findPtcg(d){
+  if(PTCG[d.id] || !ptcgSets.length) return null;
+  const free = ptcgSets.filter(p => !usedPtcg.has(p.id));
+  const date = (d.releaseDate || "").replace(/-/g, "/");
+  const byName = free.filter(p => norm(p.name) === norm(d.name));
+  const pick = byName.find(p => p.releaseDate === date) || (byName.length === 1 ? byName[0] : null)
+    || (() => { const same = free.filter(p => date && p.releaseDate === date && norm(p.series) === norm(d.serie?.name)); return same.length === 1 ? same[0] : null; })();
+  if(pick){ usedPtcg.add(pick.id); console.log(`${d.id}: Pokémon TCG API set ${pick.id} (${pick.name})`); }
+  return pick;
+}
 let changed = 0;
 const sets = (await pool(list, 6, async s => {
   const d = await getJSON(`${API}/sets/${encodeURIComponent(s.id)}`);
   if(!d || d.serie?.id === "tcgp") return null;   // TCG Pocket is a phone game, not physical cards
+  const pt = findPtcg(d); if(pt) autoPtcg[d.id] = pt;
   const cards = (d.cards || []).map(c => ({id:c.id, localId:String(c.localId), name:c.name, ...(c.image ? {image:c.image} : {})}));
   const have = new Set(cards.map(c => c.localId));
   const extra = (repoCards[d.id] || []).filter(c => !have.has(c.localId)).sort(byNumber).map(c => ({id:`${d.id}-${c.localId}`, localId:c.localId, name:c.name}));
@@ -101,7 +133,11 @@ const sets = (await pool(list, 6, async s => {
   if(await writeIfChanged(path.join(OUT, "sets", `${d.id}.json`), JSON.stringify(set))) changed++;
   const logoFile = await image([d.logo && d.logo + ".webp", d.logo && d.logo + ".png", ptcgArt(d.id, "logo")], path.join(OUT, "logos", d.id));
   const symbolFile = await image([d.symbol && d.symbol + ".webp", d.symbol && d.symbol + ".png", ptcgArt(d.id, "symbol")], path.join(OUT, "symbols", d.id));
-  return {id:d.id, name:d.name, logo:d.logo || "", symbol:d.symbol || "", logoFile, symbolFile, total:set.cardCount.total, official:set.cardCount.official, serie:set.serie.id, releaseDate:set.releaseDate};
+  const code = repoCode[d.id] || d.abbreviation?.official || d.abbreviations?.official || "";
+  const pid = PTCG[d.id] || pt?.id || "";
+  return {id:d.id, name:d.name, logo:d.logo || "", symbol:d.symbol || "", logoFile, symbolFile, total:set.cardCount.total, official:set.cardCount.official,
+    serie:set.serie.id, serieName:set.serie.name, releaseDate:set.releaseDate, code,
+    ...(pid ? {ptcg:pid} : {}), ...(pid && (SCRYDEX.has(pid) || /scrydex/.test(pt?.images?.logo || "")) ? {scrydex:true} : {})};
 })).filter(Boolean);
 
 // keep the database's own order (oldest first), like the API

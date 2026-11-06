@@ -57,6 +57,8 @@ if(ok < all.length * 0.5) throw new Error(`Only ${ok} of ${all.length} cards ans
 // ---- fill the gaps from the Pokémon TCG API ----
 const html = await fs.readFile(path.join(ROOT, "index.html"), "utf8");
 const PTCG = JSON.parse(html.match(/const PTCG = (\{.*?\});/)[1]);
+// new sets: the Pokémon TCG API id that build-data.mjs found for them
+try{ for(const x of JSON.parse(await fs.readFile(path.join(ROOT, "data", "sets.json"), "utf8")).sets) if(x.ptcg && !PTCG[x.id]) PTCG[x.id] = x.ptcg; }catch(e){}
 const PTCG_API = process.env.PTCG_API || "https://api.pokemontcg.io/v2/cards";
 const headers = {"User-Agent":"SetDex price copy (github.com/lucenttiara2272/setdex)", ...(process.env.POKEMONTCG_API_KEY ? {"X-Api-Key":process.env.POKEMONTCG_API_KEY} : {})};
 const normNo = l => /^\d+$/.test(l) ? String(+l) : l.toUpperCase();

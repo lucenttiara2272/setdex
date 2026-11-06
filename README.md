@@ -6,6 +6,7 @@ A free Pokémon TCG collection tracker. Track every set and subset card by card,
 
 ## What it does
 - Every physical Pokémon TCG set, grouped by series, with set symbols and codes (PAF, SVI, LTR …).
+- **New sets show up by themselves**, usually the day the card database adds them, with set code, series, subsets, pictures and prices. They get a **NEW** badge for 30 days.
 - Subsets get their own tab: Radiant Collection, Trainer Gallery, Galarian Gallery, Shiny Vault, Classic Collection, the 30th Celebration Pikachu Collection.
 - Tap **+** / **−** on a card to add or remove a copy. Tap the picture for reverse holos and other versions.
 - Set value, master set value and the value of your own cards, from daily Cardmarket prices.
@@ -91,7 +92,7 @@ Otherwise, do step 3 once on every phone and computer. The token is stored only 
 Prices are estimates of the market value, not what a shop will pay.
 
 ## Card data copy
-The set list, card lists, set logos and symbols are copied into [`data/`](data/) every Monday by the **Update card data** GitHub Action ([`scripts/build-data.mjs`](scripts/build-data.mjs)). The app loads them from this site first, so it's faster and works offline. Sets newer than the copy are still fetched from TCGdex. Card pictures and prices aren't copied; they're loaded live. To update right away, go to **Actions → Update card data → Run workflow**.
+The set list, card lists, set logos and symbols are copied into [`data/`](data/) every day by the **Update card data** GitHub Action ([`scripts/build-data.mjs`](scripts/build-data.mjs)). The app loads them from this site first, so it's faster and works offline. Sets newer than the copy are still fetched from TCGdex. Card pictures and prices aren't copied; they're loaded live. To update right away, go to **Actions → Update card data → Run workflow**.
 
 ## Legal
 SetDex is a free, unofficial, fan-made tool. It isn't produced, endorsed, sponsored, supported or approved by Nintendo, The Pokémon Company, Creatures Inc. or GAME FREAK, and it isn't affiliated with them in any way.
